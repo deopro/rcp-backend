@@ -1,0 +1,16 @@
+# Dependencies that should not be versioned
+.cache/
+.strapi/
+.strapi-updater.json
+.strapi-cloud.json
+build/
+dist/
+node_modules/
+.tmp/
+.DS_Store
+.env
+license.txt
+exports/
+*.cache
+public/uploads/*
+!public/uploads/.gitkeep

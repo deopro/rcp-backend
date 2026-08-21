@@ -1,0 +1,118 @@
+import type { Core } from '@strapi/strapi'
+import { registerOrgRoutes } from './services/org/register-routes'
+import { ensureOrgPermissions } from './services/rbac/ensure-org-permissions'
+import { ensureRcpRoles } from './services/rbac/ensure-roles'
+import { getAuthMode } from './utils/auth-mode'
+
+function sanitizeUser(user: Record<string, unknown>) {
+  const { password: _p, resetPasswordToken: _r, confirmationToken: _c, ...safe } = user
+  return safe
+}
+
+const register = ({ strapi }: { strapi: Core.Strapi }) => {
+  registerOrgRoutes(strapi)
+
+  strapi.server.routes([
+    {
+      method: 'GET',
+      path: '/api/account/me',
+      handler: async (ctx) => {
+        const authUser = ctx.state.user as { id: number } | undefined
+        if (!authUser) {
+          return ctx.unauthorized('Authentication required')
+        }
+
+        const user = await strapi.db.query('plugin::users-permissions.user').findOne({
+          where: { id: authUser.id },
+          populate: ['role'],
+        })
+
+        if (!user || user.status === 'inactive') {
+          return ctx.unauthorized('User is inactive')
+        }
+
+        ctx.body = sanitizeUser(user as Record<string, unknown>)
+      },
+      config: {
+        auth: {
+          scope: [],
+        },
+      },
+    },
+    {
+      method: 'PUT',
+      path: '/api/account/me',
+      handler: async (ctx) => {
+        const authUser = ctx.state.user as { id: number } | undefined
+        if (!authUser) {
+          return ctx.unauthorized('Authentication required')
+        }
+
+        const body = ctx.request.body as { preferred_locale?: string }
+        const preferredLocale = body?.preferred_locale
+        if (preferredLocale !== 'pt-PT' && preferredLocale !== 'en') {
+          return ctx.badRequest('preferred_locale must be pt-PT or en')
+        }
+
+        const existing = await strapi.db.query('plugin::users-permissions.user').findOne({
+          where: { id: authUser.id },
+        })
+
+        if (!existing || existing.status === 'inactive') {
+          return ctx.unauthorized('User is inactive')
+        }
+
+        const updated = await strapi.db.query('plugin::users-permissions.user').update({
+          where: { id: authUser.id },
+          data: { preferred_locale: preferredLocale },
+          populate: ['role'],
+        })
+
+        ctx.body = sanitizeUser(updated as Record<string, unknown>)
+      },
+      config: {
+        auth: {
+          scope: [],
+        },
+      },
+    },
+    {
+      method: 'GET',
+      path: '/api/auth/oidc',
+      handler: async (ctx) => {
+        const mode = getAuthMode()
+        ctx.status = mode === 'oidc' ? 501 : 400
+        ctx.body = {
+          error: {
+            status: ctx.status,
+            name: 'OidcNotConfigured',
+            message:
+              mode === 'oidc'
+                ? 'OIDC/Entra ID mode is enabled but the provider is not configured yet. See ARCHITECTURE.md.'
+                : 'AUTH_MODE is local. Set AUTH_MODE=oidc and configure OIDC_* env vars to use Entra ID.',
+          },
+        }
+      },
+      config: {
+        auth: false,
+      },
+    },
+  ])
+}
+
+const bootstrap = async ({ strapi }: { strapi: Core.Strapi }) => {
+  strapi.log.info(`RCP API ready (AUTH_MODE=${getAuthMode()})`)
+
+  try {
+    await ensureRcpRoles(strapi)
+    await ensureOrgPermissions(strapi)
+  } catch (error) {
+    strapi.log.error('Failed to ensure RCP roles / org permissions')
+    strapi.log.error(error)
+  }
+}
+
+export default {
+  register,
+  bootstrap,
+}

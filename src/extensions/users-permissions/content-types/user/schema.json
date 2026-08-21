@@ -1,0 +1,14 @@
+{
+  "attributes": {
+    "preferred_locale": {
+      "type": "enumeration",
+      "enum": ["pt-PT", "en"],
+      "default": "pt-PT"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["active", "inactive"],
+      "default": "active"
+    }
+  }
+}

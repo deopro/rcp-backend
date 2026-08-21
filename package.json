@@ -1,0 +1,36 @@
+{
+  "name": "rcp-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RCP Strapi 5 API",
+  "scripts": {
+    "build": "strapi build",
+    "console": "strapi console",
+    "deploy": "strapi deploy",
+    "develop": "strapi develop",
+    "start": "strapi start",
+    "strapi": "strapi",
+    "upgrade": "npx @strapi/upgrade latest"
+  },
+  "dependencies": {
+    "@strapi/plugin-cloud": "5.12.6",
+    "@strapi/plugin-users-permissions": "5.12.6",
+    "@strapi/strapi": "5.12.6",
+    "mysql2": "3.14.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-router-dom": "^6.0.0",
+    "styled-components": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18.0.0 <=22.x.x",
+    "npm": ">=6.0.0"
+  },
+  "strapi": {
+    "uuid": "rcp-backend-00000000-0000-4000-8000-000000000001"
+  }
+}

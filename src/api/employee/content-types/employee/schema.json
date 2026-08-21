@@ -1,0 +1,58 @@
+{
+  "kind": "collectionType",
+  "collectionName": "employees",
+  "info": {
+    "singularName": "employee",
+    "pluralName": "employees",
+    "displayName": "Employee",
+    "description": "Employee / resource"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "employee_number": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "full_name": {
+      "type": "string",
+      "required": true
+    },
+    "email": {
+      "type": "email",
+      "required": true
+    },
+    "position": {
+      "type": "string"
+    },
+    "daily_capacity": {
+      "type": "decimal",
+      "required": true,
+      "default": 8,
+      "min": 0.5,
+      "max": 24
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["active", "inactive"],
+      "default": "active",
+      "required": true
+    },
+    "hire_date": {
+      "type": "date"
+    },
+    "user": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "team": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::team.team",
+      "inversedBy": "employees"
+    }
+  }
+}
