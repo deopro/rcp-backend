@@ -5,7 +5,7 @@
     "singularName": "skill",
     "pluralName": "skills",
     "displayName": "Skill",
-    "description": "Skill catalog (expanded in Milestone 5)"
+    "description": "Skill catalog"
   },
   "options": {
     "draftAndPublish": false
@@ -16,17 +16,26 @@
       "required": true,
       "unique": true
     },
-    "category": {
-      "type": "string"
-    },
     "description": {
       "type": "text"
+    },
+    "skill_category": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::skill-category.skill-category",
+      "inversedBy": "skills"
     },
     "projects": {
       "type": "relation",
       "relation": "manyToMany",
       "target": "api::project.project",
       "mappedBy": "required_skills"
+    },
+    "employee_skills": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::employee-skill.employee-skill",
+      "mappedBy": "skill"
     }
   }
 }

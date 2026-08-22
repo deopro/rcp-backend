@@ -1,0 +1,29 @@
+{
+  "kind": "collectionType",
+  "collectionName": "skill_categories",
+  "info": {
+    "singularName": "skill-category",
+    "pluralName": "skill-categories",
+    "displayName": "Skill Category",
+    "description": "Skill grouping for catalog and matrix filters"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "skills": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::skill.skill",
+      "mappedBy": "skill_category"
+    }
+  }
+}
