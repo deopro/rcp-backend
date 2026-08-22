@@ -1,7 +1,9 @@
 /**
- * Project controller — validates dates and scopes lists by role.
+ * Project controller — validates dates, scopes lists by role,
+ * and assigns sequential codes (RCP0001, RCP0002, …) on create.
  */
 import { factories } from '@strapi/strapi'
+import { allocateNextProjectCode } from '../../../services/projects/project-code'
 import { resolveRoleType } from '../../../utils/resolve-role-type'
 
 function validateDates(body: { data?: Record<string, unknown> }) {
@@ -51,18 +53,31 @@ export default factories.createCoreController('api::project.project', ({ strapi 
   },
 
   async create(ctx) {
-    const error = validateDates(ctx.request.body as { data?: Record<string, unknown> })
+    const body = ctx.request.body as { data?: Record<string, unknown> }
+    const error = validateDates(body)
     if (error) {
       return ctx.badRequest(error)
     }
+
+    // Always assign the next sequential code server-side (RCP0001, RCP0002, …).
+    body.data = body.data || {}
+    body.data.code = await allocateNextProjectCode(strapi)
+
     return await super.create(ctx)
   },
 
   async update(ctx) {
-    const error = validateDates(ctx.request.body as { data?: Record<string, unknown> })
+    const body = ctx.request.body as { data?: Record<string, unknown> }
+    const error = validateDates(body)
     if (error) {
       return ctx.badRequest(error)
     }
+
+    // Codes are system-generated and immutable.
+    if (body?.data && 'code' in body.data) {
+      delete body.data.code
+    }
+
     return await super.update(ctx)
   },
 }))
