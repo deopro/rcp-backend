@@ -1,6 +1,8 @@
 import type { Core } from '@strapi/strapi'
 import { registerOrgRoutes } from './services/org/register-routes'
+import { registerProjectRoutes } from './services/projects/register-routes'
 import { ensureOrgPermissions } from './services/rbac/ensure-org-permissions'
+import { ensureProjectPermissions } from './services/rbac/ensure-project-permissions'
 import { ensureRcpRoles } from './services/rbac/ensure-roles'
 import { getAuthMode } from './utils/auth-mode'
 
@@ -27,6 +29,7 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
   }
 
   registerOrgRoutes(strapi)
+  registerProjectRoutes(strapi)
 
   strapi.server.routes([
     {
@@ -122,8 +125,9 @@ const bootstrap = async ({ strapi }: { strapi: Core.Strapi }) => {
   try {
     await ensureRcpRoles(strapi)
     await ensureOrgPermissions(strapi)
+    await ensureProjectPermissions(strapi)
   } catch (error) {
-    strapi.log.error('Failed to ensure RCP roles / org permissions')
+    strapi.log.error('Failed to ensure RCP roles / permissions')
     strapi.log.error(error)
   }
 }
