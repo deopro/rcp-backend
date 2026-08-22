@@ -10,6 +10,22 @@ function sanitizeUser(user: Record<string, unknown>) {
 }
 
 const register = ({ strapi }: { strapi: Core.Strapi }) => {
+  // Merge custom User fields (partial extensions/.../schema.json overrides core attrs).
+  const userType = strapi.contentType('plugin::users-permissions.user')
+  userType.attributes = {
+    ...userType.attributes,
+    preferred_locale: {
+      type: 'enumeration',
+      enum: ['pt-PT', 'en'],
+      default: 'pt-PT',
+    },
+    status: {
+      type: 'enumeration',
+      enum: ['active', 'inactive'],
+      default: 'active',
+    },
+  }
+
   registerOrgRoutes(strapi)
 
   strapi.server.routes([
