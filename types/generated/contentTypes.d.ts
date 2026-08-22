@@ -369,6 +369,60 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiAllocationAllocation extends Struct.CollectionTypeSchema {
+  collectionName: 'allocations';
+  info: {
+    description: 'Daily project hours per employee';
+    displayName: 'Allocation';
+    pluralName: 'allocations';
+    singularName: 'allocation';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    allocation_date: Schema.Attribute.Date & Schema.Attribute.Required;
+    created_by: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    employee: Schema.Attribute.Relation<'manyToOne', 'api::employee.employee'> &
+      Schema.Attribute.Required;
+    hours: Schema.Attribute.Decimal &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          max: 24;
+          min: 0.5;
+        },
+        number
+      >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::allocation.allocation'
+    > &
+      Schema.Attribute.Private;
+    notes: Schema.Attribute.Text;
+    project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
+      Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<['draft', 'submitted']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    updated_by: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiClientClient extends Struct.CollectionTypeSchema {
   collectionName: 'clients';
   info: {
@@ -1222,6 +1276,7 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::allocation.allocation': ApiAllocationAllocation;
       'api::client.client': ApiClientClient;
       'api::department.department': ApiDepartmentDepartment;
       'api::employee-skill.employee-skill': ApiEmployeeSkillEmployeeSkill;

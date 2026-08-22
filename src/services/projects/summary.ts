@@ -63,8 +63,18 @@ export async function computeProjectSummary(
     return sum + workingDays * daily
   }, 0)
 
-  // Allocations arrive in Milestone 6 — reserved field stays 0 for now.
-  const allocatedHours = 0
+  // Allocations arrive in Milestone 6 — sum hours on assigned employees in project date range.
+  let allocatedHours = 0
+  if (employees.length && project.start_date && project.end_date) {
+    const empIds = employees.map((e: { id: number }) => e.id)
+    const rows = await strapi.db.query('api::allocation.allocation').findMany({
+      where: {
+        employee: { id: { $in: empIds } },
+        allocation_date: { $gte: project.start_date, $lte: project.end_date },
+      },
+    })
+    allocatedHours = rows.reduce((sum: number, r: { hours?: number }) => sum + Number(r.hours || 0), 0)
+  }
 
   return {
     project_id: project.id,
