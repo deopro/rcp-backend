@@ -5,10 +5,13 @@ import type { Core } from '@strapi/strapi'
 import { computeProjectSummary } from './summary'
 
 export function registerProjectRoutes(strapi: Core.Strapi) {
-  strapi.server.routes([
+  strapi.server.routes({
+    type: 'content-api',
+    routes: [
     {
       method: 'GET',
-      path: '/api/projects/:documentId/summary',
+      path: '/projects/:documentId/summary',
+      info: {},
       handler: async (ctx) => {
         const authUser = ctx.state.user as { id: number } | undefined
         if (!authUser) {
@@ -30,5 +33,6 @@ export function registerProjectRoutes(strapi: Core.Strapi) {
         },
       },
     },
-  ])
+    ],
+  })
 }
