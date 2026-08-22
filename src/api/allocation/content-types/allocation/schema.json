@@ -1,0 +1,56 @@
+{
+  "kind": "collectionType",
+  "collectionName": "allocations",
+  "info": {
+    "singularName": "allocation",
+    "pluralName": "allocations",
+    "displayName": "Allocation",
+    "description": "Daily project hours per employee"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "employee": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::employee.employee",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "required": true
+    },
+    "allocation_date": {
+      "type": "date",
+      "required": true
+    },
+    "hours": {
+      "type": "decimal",
+      "required": true,
+      "min": 0.5,
+      "max": 24
+    },
+    "notes": {
+      "type": "text"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["draft", "submitted"],
+      "default": "draft",
+      "required": true
+    },
+    "created_by": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "updated_by": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}

@@ -29,7 +29,7 @@ const ROLE_MATRIX: Record<
   department_manager: {
     'api::client.client': READ,
     'api::skill.skill': READ,
-    'api::project.project': ['find', 'findOne', 'create', 'update'],
+    'api::project.project': ['find', 'findOne', 'create', 'update', 'delete'],
   },
   team_leader: {
     'api::client.client': READ,

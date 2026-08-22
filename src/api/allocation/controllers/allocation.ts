@@ -1,0 +1,127 @@
+/**
+ * Allocation controller — capacity validation and role scoping.
+ */
+import { factories } from '@strapi/strapi'
+import { resolveRoleType } from '../../../utils/resolve-role-type'
+import {
+  assertUniqueAllocation,
+  CapacityExceededError,
+  extractAllocationFields,
+  validateAllocationCapacity,
+} from '../../../services/allocations/validate'
+
+function capacityErrorResponse(
+  ctx: { badRequest: (response?: string | object, details?: object) => unknown },
+  err: CapacityExceededError,
+) {
+  return ctx.badRequest('CAPACITY_EXCEEDED', {
+    code: 'CAPACITY_EXCEEDED',
+    employee_id: err.employeeId,
+    date: err.date,
+    capacity: err.capacity,
+    allocated: err.allocated,
+    requested: err.requested,
+    excess: Math.round((err.allocated + err.requested - err.capacity) * 100) / 100,
+  })
+}
+
+export default factories.createCoreController('api::allocation.allocation', ({ strapi }) => ({
+  async find(ctx) {
+    const user = ctx.state.user as { id: number } | undefined
+    if (!user) return ctx.unauthorized()
+
+    const roleType = await resolveRoleType(strapi, user)
+    const filters = { ...(ctx.query.filters as object | undefined) }
+
+    if (roleType === 'employee') {
+      ctx.query.filters = {
+        $and: [filters, { employee: { user: { id: { $eq: user.id } } } }],
+      }
+    } else if (roleType === 'team_leader') {
+      ctx.query.filters = {
+        $and: [filters, { employee: { team: { team_leader: { id: { $eq: user.id } } } } }],
+      }
+    } else if (roleType === 'department_manager') {
+      ctx.query.filters = {
+        $and: [
+          filters,
+          { employee: { team: { department: { manager: { id: { $eq: user.id } } } } } },
+        ],
+      }
+    }
+
+    return await super.find(ctx)
+  },
+
+  async create(ctx) {
+    const user = ctx.state.user as { id: number } | undefined
+    const body = ctx.request.body as { data?: Record<string, unknown> }
+    const fields = extractAllocationFields(body?.data || {})
+
+    if (!fields.employeeId || !fields.projectId || !fields.date || !fields.hours) {
+      return ctx.badRequest('employee, project, allocation_date, and hours are required')
+    }
+    if (fields.hours <= 0) {
+      return ctx.badRequest('hours must be greater than 0')
+    }
+
+    const dup = await assertUniqueAllocation(
+      strapi,
+      fields.employeeId,
+      fields.projectId,
+      fields.date,
+    )
+    if (dup) return ctx.badRequest(dup)
+
+    try {
+      await validateAllocationCapacity(strapi, fields.employeeId, fields.date, fields.hours)
+    } catch (e) {
+      if (e instanceof CapacityExceededError) return capacityErrorResponse(ctx, e)
+      throw e
+    }
+
+    if (body?.data && user) {
+      body.data.created_by = user.id
+      body.data.updated_by = user.id
+      if (!body.data.status) body.data.status = 'draft'
+    }
+
+    return await super.create(ctx)
+  },
+
+  async update(ctx) {
+    const user = ctx.state.user as { id: number } | undefined
+    const documentId = ctx.params.id as string
+    const body = ctx.request.body as { data?: Record<string, unknown> }
+
+    const existing = await strapi.db.query('api::allocation.allocation').findOne({
+      where: { documentId },
+      populate: ['employee', 'project'],
+    })
+    if (!existing) return ctx.notFound()
+
+    const incoming = extractAllocationFields({ ...existing, ...body?.data })
+    const employeeId = incoming.employeeId || existing.employee?.id
+    const projectId = incoming.projectId || existing.project?.id
+    const date = incoming.date || existing.allocation_date
+    const hours = incoming.hours || Number(existing.hours)
+
+    if (employeeId && projectId && date) {
+      const dup = await assertUniqueAllocation(strapi, employeeId, projectId, date, documentId)
+      if (dup) return ctx.badRequest(dup)
+    }
+
+    try {
+      await validateAllocationCapacity(strapi, employeeId!, date!, hours, existing.id)
+    } catch (e) {
+      if (e instanceof CapacityExceededError) return capacityErrorResponse(ctx, e)
+      throw e
+    }
+
+    if (body?.data && user) {
+      body.data.updated_by = user.id
+    }
+
+    return await super.update(ctx)
+  },
+}))

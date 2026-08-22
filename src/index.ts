@@ -1,6 +1,8 @@
 import type { Core } from '@strapi/strapi'
+import { registerAllocationRoutes } from './services/allocations/register-routes'
 import { registerOrgRoutes } from './services/org/register-routes'
 import { registerProjectRoutes } from './services/projects/register-routes'
+import { ensureAllocationPermissions } from './services/rbac/ensure-allocation-permissions'
 import { ensureOrgPermissions } from './services/rbac/ensure-org-permissions'
 import { ensureProjectPermissions } from './services/rbac/ensure-project-permissions'
 import { ensureSkillsPermissions } from './services/rbac/ensure-skills-permissions'
@@ -32,6 +34,7 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
 
   registerOrgRoutes(strapi)
   registerProjectRoutes(strapi)
+  registerAllocationRoutes(strapi)
 
   // content-api routes get users-permissions JWT auth; default server.routes() uses type "api" (no strategy).
   strapi.server.routes({
@@ -43,9 +46,6 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
       info: {},
       handler: async (ctx) => {
         const authUser = ctx.state.user as { id: number } | undefined
-        // #region agent log
-        fetch('http://host.docker.internal:7550/ingest/00e40e9f-34c6-4349-ac97-bfda2cfa152b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'805b23'},body:JSON.stringify({sessionId:'805b23',runId:'post-fix',hypothesisId:'H6',location:'index.ts:account-me-get',message:'account/me handler',data:{hasAuthUser:Boolean(authUser),authUserId:authUser?.id??null},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         if (!authUser) {
           return ctx.unauthorized('Authentication required')
         }
@@ -139,6 +139,7 @@ const bootstrap = async ({ strapi }: { strapi: Core.Strapi }) => {
     await ensureOrgPermissions(strapi)
     await ensureProjectPermissions(strapi)
     await ensureSkillsPermissions(strapi)
+    await ensureAllocationPermissions(strapi)
     await ensureUserRelationPermissions(strapi)
   } catch (error) {
     strapi.log.error('Failed to ensure RCP roles / permissions')
