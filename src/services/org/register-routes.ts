@@ -13,10 +13,13 @@ const ASSIGNMENT_ROLES = new Set([
 ])
 
 export function registerOrgRoutes(strapi: Core.Strapi) {
-  strapi.server.routes([
+  strapi.server.routes({
+    type: 'content-api',
+    routes: [
     {
       method: 'GET',
-      path: '/api/org/user-options',
+      path: '/org/user-options',
+      info: {},
       handler: async (ctx) => {
         const authUser = ctx.state.user as
           | { id: number; role?: { type?: string } }
@@ -52,5 +55,6 @@ export function registerOrgRoutes(strapi: Core.Strapi) {
         },
       },
     },
-  ])
+    ],
+  })
 }

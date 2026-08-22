@@ -1,6 +1,9 @@
 import type { Core } from '@strapi/strapi'
 import { registerOrgRoutes } from './services/org/register-routes'
+import { registerProjectRoutes } from './services/projects/register-routes'
 import { ensureOrgPermissions } from './services/rbac/ensure-org-permissions'
+import { ensureProjectPermissions } from './services/rbac/ensure-project-permissions'
+import { ensureUserRelationPermissions } from './services/rbac/ensure-user-relation-permissions'
 import { ensureRcpRoles } from './services/rbac/ensure-roles'
 import { getAuthMode } from './utils/auth-mode'
 
@@ -27,13 +30,21 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
   }
 
   registerOrgRoutes(strapi)
+  registerProjectRoutes(strapi)
 
-  strapi.server.routes([
+  // content-api routes get users-permissions JWT auth; default server.routes() uses type "api" (no strategy).
+  strapi.server.routes({
+    type: 'content-api',
+    routes: [
     {
       method: 'GET',
-      path: '/api/account/me',
+      path: '/account/me',
+      info: {},
       handler: async (ctx) => {
         const authUser = ctx.state.user as { id: number } | undefined
+        // #region agent log
+        fetch('http://host.docker.internal:7550/ingest/00e40e9f-34c6-4349-ac97-bfda2cfa152b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'805b23'},body:JSON.stringify({sessionId:'805b23',runId:'post-fix',hypothesisId:'H6',location:'index.ts:account-me-get',message:'account/me handler',data:{hasAuthUser:Boolean(authUser),authUserId:authUser?.id??null},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         if (!authUser) {
           return ctx.unauthorized('Authentication required')
         }
@@ -57,7 +68,8 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
     },
     {
       method: 'PUT',
-      path: '/api/account/me',
+      path: '/account/me',
+      info: {},
       handler: async (ctx) => {
         const authUser = ctx.state.user as { id: number } | undefined
         if (!authUser) {
@@ -94,7 +106,8 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
     },
     {
       method: 'GET',
-      path: '/api/auth/oidc',
+      path: '/auth/oidc',
+      info: {},
       handler: async (ctx) => {
         const mode = getAuthMode()
         ctx.status = mode === 'oidc' ? 501 : 400
@@ -113,7 +126,8 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
         auth: false,
       },
     },
-  ])
+    ],
+  })
 }
 
 const bootstrap = async ({ strapi }: { strapi: Core.Strapi }) => {
@@ -122,8 +136,10 @@ const bootstrap = async ({ strapi }: { strapi: Core.Strapi }) => {
   try {
     await ensureRcpRoles(strapi)
     await ensureOrgPermissions(strapi)
+    await ensureProjectPermissions(strapi)
+    await ensureUserRelationPermissions(strapi)
   } catch (error) {
-    strapi.log.error('Failed to ensure RCP roles / org permissions')
+    strapi.log.error('Failed to ensure RCP roles / permissions')
     strapi.log.error(error)
   }
 }
