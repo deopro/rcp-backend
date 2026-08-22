@@ -59,6 +59,12 @@
       "relation": "manyToMany",
       "target": "api::project.project",
       "mappedBy": "assigned_employees"
+    },
+    "employee_skills": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::employee-skill.employee-skill",
+      "mappedBy": "employee"
     }
   }
 }

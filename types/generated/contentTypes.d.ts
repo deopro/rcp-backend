@@ -446,6 +446,51 @@ export interface ApiDepartmentDepartment extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiEmployeeSkillEmployeeSkill
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'employee_skills';
+  info: {
+    description: 'Employee proficiency on a skill';
+    displayName: 'Employee Skill';
+    pluralName: 'employee-skills';
+    singularName: 'employee-skill';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    certification: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    employee: Schema.Attribute.Relation<'manyToOne', 'api::employee.employee'>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::employee-skill.employee-skill'
+    > &
+      Schema.Attribute.Private;
+    proficiency_level: Schema.Attribute.Enumeration<
+      ['basic', 'intermediate', 'advanced', 'expert']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'basic'>;
+    publishedAt: Schema.Attribute.DateTime;
+    skill: Schema.Attribute.Relation<'manyToOne', 'api::skill.skill'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    years_experience: Schema.Attribute.Decimal &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+  };
+}
+
 export interface ApiEmployeeEmployee extends Struct.CollectionTypeSchema {
   collectionName: 'employees';
   info: {
@@ -475,6 +520,10 @@ export interface ApiEmployeeEmployee extends Struct.CollectionTypeSchema {
     employee_number: Schema.Attribute.String &
       Schema.Attribute.Required &
       Schema.Attribute.Unique;
+    employee_skills: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::employee-skill.employee-skill'
+    >;
     full_name: Schema.Attribute.String & Schema.Attribute.Required;
     hire_date: Schema.Attribute.Date;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
@@ -549,10 +598,44 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiSkillCategorySkillCategory
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'skill_categories';
+  info: {
+    description: 'Skill grouping for catalog and matrix filters';
+    displayName: 'Skill Category';
+    pluralName: 'skill-categories';
+    singularName: 'skill-category';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::skill-category.skill-category'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    publishedAt: Schema.Attribute.DateTime;
+    skills: Schema.Attribute.Relation<'oneToMany', 'api::skill.skill'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiSkillSkill extends Struct.CollectionTypeSchema {
   collectionName: 'skills';
   info: {
-    description: 'Skill catalog (expanded in Milestone 5)';
+    description: 'Skill catalog';
     displayName: 'Skill';
     pluralName: 'skills';
     singularName: 'skill';
@@ -561,11 +644,14 @@ export interface ApiSkillSkill extends Struct.CollectionTypeSchema {
     draftAndPublish: false;
   };
   attributes: {
-    category: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     description: Schema.Attribute.Text;
+    employee_skills: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::employee-skill.employee-skill'
+    >;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<'oneToMany', 'api::skill.skill'> &
       Schema.Attribute.Private;
@@ -574,6 +660,10 @@ export interface ApiSkillSkill extends Struct.CollectionTypeSchema {
       Schema.Attribute.Unique;
     projects: Schema.Attribute.Relation<'manyToMany', 'api::project.project'>;
     publishedAt: Schema.Attribute.DateTime;
+    skill_category: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::skill-category.skill-category'
+    >;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1134,8 +1224,10 @@ declare module '@strapi/strapi' {
       'admin::user': AdminUser;
       'api::client.client': ApiClientClient;
       'api::department.department': ApiDepartmentDepartment;
+      'api::employee-skill.employee-skill': ApiEmployeeSkillEmployeeSkill;
       'api::employee.employee': ApiEmployeeEmployee;
       'api::project.project': ApiProjectProject;
+      'api::skill-category.skill-category': ApiSkillCategorySkillCategory;
       'api::skill.skill': ApiSkillSkill;
       'api::team.team': ApiTeamTeam;
       'plugin::content-releases.release': PluginContentReleasesRelease;
