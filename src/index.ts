@@ -21,6 +21,12 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
   const userType = strapi.contentType('plugin::users-permissions.user')
   userType.attributes = {
     ...userType.attributes,
+    first_name: {
+      type: 'string',
+    },
+    last_name: {
+      type: 'string',
+    },
     preferred_locale: {
       type: 'enumeration',
       enum: ['pt-PT', 'en'],
