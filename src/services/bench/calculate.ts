@@ -1,10 +1,8 @@
 /**
- * Bench = remaining capacity in a window (available − allocated).
- * Optional skill filter keeps employees who have any of the requested skills.
+ * Bench calculation — remaining capacity in a window.
  */
 import type { Core } from '@strapi/strapi'
 import { computeCapacity, type CapacityResult } from '../capacity/calculate'
-
 export type BenchSkill = {
   id: number
   name: string
@@ -149,45 +147,5 @@ export async function computeBench(
       bench_pct: pct(totalsRemaining, totalsAvailable),
     },
     employees,
-  }
-}
-
-/**
- * Forecast stub for Milestone 11 — returns current bench snapshot + placeholder series.
- */
-export async function computeForecastStub(
-  strapi: Core.Strapi,
-  opts: {
-    from: string
-    to: string
-    scope?: string
-    teamId?: number
-    userId?: number
-    roleType?: string | null
-  },
-) {
-  const bench = await computeBench(strapi, {
-    from: opts.from,
-    to: opts.to,
-    teamId: opts.teamId,
-    userId: opts.userId,
-    roleType: opts.roleType,
-  })
-
-  return {
-    status: 'stub' as const,
-    milestone: 11,
-    message:
-      'Forecast API is prepared. Full week/month forecasting ships in Milestone 11. Current bench is returned as the baseline.',
-    scope: opts.scope || 'org',
-    from: opts.from,
-    to: opts.to,
-    baseline: {
-      remaining_hours: bench.totals.remaining_hours,
-      utilization_pct: bench.totals.utilization_pct,
-      bench_pct: bench.totals.bench_pct,
-      employees: bench.totals.employees,
-    },
-    series: [] as { date: string; remaining_hours: number; utilization_pct: number }[],
   }
 }
