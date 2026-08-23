@@ -4,6 +4,7 @@
 import type { Core } from '@strapi/strapi'
 import { computeCapacity } from '../capacity/calculate'
 import { copyAllocations } from './copy'
+import { findEmployeeIdForUser } from '../../utils/employee-scope'
 import { resolveRoleType } from '../../utils/resolve-role-type'
 
 export function registerAllocationRoutes(strapi: Core.Strapi) {
@@ -67,7 +68,8 @@ export function registerAllocationRoutes(strapi: Core.Strapi) {
           }
 
           if (roleType === 'employee') {
-            allocWhere.employee = { user: { id: user.id } }
+            const employeeId = await findEmployeeIdForUser(strapi, user.id)
+            allocWhere.employee = employeeId ?? { id: { $in: [] } }
           } else if (roleType === 'team_leader') {
             allocWhere.employee = { team: { team_leader: { id: user.id } } }
           } else if (roleType === 'department_manager') {

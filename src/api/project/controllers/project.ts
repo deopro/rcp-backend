@@ -4,6 +4,7 @@
  */
 import { factories } from '@strapi/strapi'
 import { allocateNextProjectCode } from '../../../services/projects/project-code'
+import { scopeProjectFilters } from '../../../utils/employee-scope'
 import { resolveRoleType } from '../../../utils/resolve-role-type'
 
 function validateDates(body: { data?: Record<string, unknown> }) {
@@ -25,29 +26,7 @@ export default factories.createCoreController('api::project.project', ({ strapi 
     const roleType = await resolveRoleType(strapi, user)
     const filters = { ...(ctx.query.filters as object | undefined) }
 
-    if (roleType === 'employee') {
-      ctx.query.filters = {
-        $and: [filters, { assigned_employees: { user: { id: { $eq: user.id } } } }],
-      }
-    } else if (roleType === 'team_leader') {
-      ctx.query.filters = {
-        $and: [
-          filters,
-          { assigned_employees: { team: { team_leader: { id: { $eq: user.id } } } } },
-        ],
-      }
-    } else if (roleType === 'department_manager') {
-      ctx.query.filters = {
-        $and: [
-          filters,
-          {
-            assigned_employees: {
-              team: { department: { manager: { id: { $eq: user.id } } } },
-            },
-          },
-        ],
-      }
-    }
+    ctx.query.filters = await scopeProjectFilters(strapi, roleType, user.id, filters)
 
     return await super.find(ctx)
   },

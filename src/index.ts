@@ -43,6 +43,16 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
     },
   }
 
+  const employeeType = strapi.contentType('api::employee.employee')
+  employeeType.attributes = {
+    ...employeeType.attributes,
+    user: {
+      type: 'relation',
+      relation: 'oneToOne',
+      target: 'plugin::users-permissions.user',
+    },
+  }
+
   registerOrgRoutes(strapi)
   registerProjectRoutes(strapi)
   registerAllocationRoutes(strapi)

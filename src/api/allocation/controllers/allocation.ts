@@ -2,6 +2,7 @@
  * Allocation controller — capacity validation, role scoping, period locks.
  */
 import { factories } from '@strapi/strapi'
+import { scopeEmployeeRelationFilters } from '../../../utils/employee-scope'
 import { resolveRoleType } from '../../../utils/resolve-role-type'
 import {
   assertUniqueAllocation,
@@ -48,22 +49,13 @@ export default factories.createCoreController('api::allocation.allocation', ({ s
     const roleType = await resolveRoleType(strapi, user)
     const filters = { ...(ctx.query.filters as object | undefined) }
 
-    if (roleType === 'employee') {
-      ctx.query.filters = {
-        $and: [filters, { employee: { user: { id: { $eq: user.id } } } }],
-      }
-    } else if (roleType === 'team_leader') {
-      ctx.query.filters = {
-        $and: [filters, { employee: { team: { team_leader: { id: { $eq: user.id } } } } }],
-      }
-    } else if (roleType === 'department_manager') {
-      ctx.query.filters = {
-        $and: [
-          filters,
-          { employee: { team: { department: { manager: { id: { $eq: user.id } } } } } },
-        ],
-      }
-    }
+    ctx.query.filters = await scopeEmployeeRelationFilters(
+      strapi,
+      roleType,
+      user.id,
+      'employee',
+      filters,
+    )
 
     return await super.find(ctx)
   },

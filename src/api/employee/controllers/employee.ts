@@ -2,6 +2,7 @@
  * Employee controller — validates daily_capacity and scopes lists by role.
  */
 import { factories } from '@strapi/strapi'
+import { scopeEmployeeFilters } from '../../../utils/employee-scope'
 import { resolveRoleType } from '../../../utils/resolve-role-type'
 
 const DEFAULT_CAPACITY = 8
@@ -24,22 +25,7 @@ export default factories.createCoreController('api::employee.employee', ({ strap
     const roleType = await resolveRoleType(strapi, user)
     const filters = { ...(ctx.query.filters as object | undefined) }
 
-    if (roleType === 'employee') {
-      ctx.query.filters = {
-        $and: [filters, { user: { id: { $eq: user.id } } }],
-      }
-    } else if (roleType === 'team_leader') {
-      ctx.query.filters = {
-        $and: [filters, { team: { team_leader: { id: { $eq: user.id } } } }],
-      }
-    } else if (roleType === 'department_manager') {
-      ctx.query.filters = {
-        $and: [
-          filters,
-          { team: { department: { manager: { id: { $eq: user.id } } } } },
-        ],
-      }
-    }
+    ctx.query.filters = await scopeEmployeeFilters(strapi, roleType, user.id, filters)
 
     return await super.find(ctx)
   },
