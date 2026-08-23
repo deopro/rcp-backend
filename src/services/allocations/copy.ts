@@ -8,6 +8,7 @@ import {
   CapacityExceededError,
   validateAllocationCapacity,
 } from './validate'
+import { assertAllocationNotLocked, PeriodLockedError } from '../approvals/lock'
 
 export type CopyMode = 'yesterday' | 'previous_week'
 
@@ -69,8 +70,14 @@ export async function copyAllocations(
 
     const hours = Number(row.hours)
     try {
+      await assertAllocationNotLocked(strapi, employeeId, targetIso)
       await validateAllocationCapacity(strapi, employeeId, targetIso, hours)
     } catch (e) {
+      if (e instanceof PeriodLockedError) {
+        errors.push(`PERIOD_LOCKED:${employeeId}:${targetIso}`)
+        skipped++
+        continue
+      }
       if (e instanceof CapacityExceededError) {
         errors.push(`CAPACITY_EXCEEDED:${employeeId}:${targetIso}`)
         skipped++
