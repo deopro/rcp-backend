@@ -369,6 +369,43 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiAiUsageLogAiUsageLog extends Struct.CollectionTypeSchema {
+  collectionName: 'ai_usage_logs';
+  info: {
+    description: 'Audit log for AI recommendation operations';
+    displayName: 'AI Usage Log';
+    pluralName: 'ai-usage-logs';
+    singularName: 'ai-usage-log';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::ai-usage-log.ai-usage-log'
+    > &
+      Schema.Attribute.Private;
+    metadata: Schema.Attribute.JSON;
+    operation: Schema.Attribute.Enumeration<['recommend', 'explain', 'apply']> &
+      Schema.Attribute.Required;
+    provider: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    > &
+      Schema.Attribute.Required;
+  };
+}
+
 export interface ApiAllocationAllocation extends Struct.CollectionTypeSchema {
   collectionName: 'allocations';
   info: {
@@ -1409,6 +1446,7 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::ai-usage-log.ai-usage-log': ApiAiUsageLogAiUsageLog;
       'api::allocation.allocation': ApiAllocationAllocation;
       'api::approval.approval': ApiApprovalApproval;
       'api::client.client': ApiClientClient;
