@@ -1,4 +1,5 @@
 import type { Core } from '@strapi/strapi'
+import { registerAiRoutes } from './services/ai/register-routes'
 import { registerAllocationRoutes } from './services/allocations/register-routes'
 import { registerApprovalRoutes } from './services/approvals/register-routes'
 import { registerBenchRoutes } from './services/bench/register-routes'
@@ -92,6 +93,7 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
   registerApprovalRoutes(strapi)
   registerDashboardRoutes(strapi)
   registerForecastRoutes(strapi)
+  registerAiRoutes(strapi)
 
   // content-api routes get users-permissions JWT auth; default server.routes() uses type "api" (no strategy).
   strapi.server.routes({

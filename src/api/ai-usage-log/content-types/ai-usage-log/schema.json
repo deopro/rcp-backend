@@ -1,0 +1,33 @@
+{
+  "kind": "collectionType",
+  "collectionName": "ai_usage_logs",
+  "info": {
+    "singularName": "ai-usage-log",
+    "pluralName": "ai-usage-logs",
+    "displayName": "AI Usage Log",
+    "description": "Audit log for AI recommendation operations"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "provider": {
+      "type": "string",
+      "required": true
+    },
+    "operation": {
+      "type": "enumeration",
+      "enum": ["recommend", "explain", "apply"],
+      "required": true
+    },
+    "metadata": {
+      "type": "json"
+    }
+  }
+}
