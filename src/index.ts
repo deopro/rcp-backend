@@ -2,6 +2,7 @@ import type { Core } from '@strapi/strapi'
 import { registerAllocationRoutes } from './services/allocations/register-routes'
 import { registerApprovalRoutes } from './services/approvals/register-routes'
 import { registerBenchRoutes } from './services/bench/register-routes'
+import { registerDashboardRoutes } from './services/dashboard/register-routes'
 import { registerOrgRoutes } from './services/org/register-routes'
 import { registerProjectRoutes } from './services/projects/register-routes'
 import { ensureAllocationPermissions } from './services/rbac/ensure-allocation-permissions'
@@ -47,6 +48,7 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
   registerAllocationRoutes(strapi)
   registerBenchRoutes(strapi)
   registerApprovalRoutes(strapi)
+  registerDashboardRoutes(strapi)
 
   // content-api routes get users-permissions JWT auth; default server.routes() uses type "api" (no strategy).
   strapi.server.routes({
