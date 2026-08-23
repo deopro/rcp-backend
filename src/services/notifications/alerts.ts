@@ -91,7 +91,13 @@ export async function scanNotificationAlerts(
           title: `Over-allocation — ${emp.full_name}`,
           body: `${day.allocated_hours}h allocated on ${day.date} (capacity ${day.available_hours}h).`,
           dedupeKey: `over:${emp.employee_id}:${day.date}`,
-          payload: { date: day.date, allocated: day.allocated_hours, available: day.available_hours, link: '/allocations' },
+          payload: {
+            date: day.date,
+            allocated: day.allocated_hours,
+            available: day.available_hours,
+            employee_name: emp.full_name,
+            link: '/allocations',
+          },
         })
       }
 
@@ -101,7 +107,7 @@ export async function scanNotificationAlerts(
           title: `Missing allocation — ${emp.full_name}`,
           body: `No hours logged on working day ${day.date}.`,
           dedupeKey: `missing:${emp.employee_id}:${day.date}`,
-          payload: { date: day.date, link: '/allocations' },
+          payload: { date: day.date, employee_name: emp.full_name, link: '/allocations' },
         })
       }
     }
@@ -127,6 +133,7 @@ export async function scanNotificationAlerts(
         bench_pct: emp.bench_pct,
         from,
         to,
+        employee_name: emp.full_name,
         link: '/bench',
       },
     })
@@ -149,7 +156,13 @@ export async function scanNotificationAlerts(
       type: 'capacity_alert',
       title: utilization > 95 ? 'High utilization alert' : 'Low utilization alert',
       body: `Scope utilization is ${Math.round(utilization * 10) / 10}% for ${from} → ${to}.`,
-      payload: { from, to, utilization_pct: Math.round(utilization * 10) / 10, link: '/' },
+      payload: {
+        from,
+        to,
+        level: utilization > 95 ? 'high' : 'low',
+        utilization_pct: Math.round(utilization * 10) / 10,
+        link: '/',
+      },
       dedupeKey: `capacity:${opts.userId}:${from}:${to}:${Math.round(utilization)}`,
     })
     if (result) created += 1

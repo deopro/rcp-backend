@@ -43,14 +43,16 @@ export async function notifyApprovalTransition(
   const teamId = opts.approval.team?.id
   if (!teamId) return
 
-  const teamName = opts.approval.team?.name || `Team #${teamId}`
+  const teamName = opts.approval.team?.name || ''
   const period = periodLabel(opts.approval.period_start, opts.approval.period_end)
+  const comments = opts.comments?.trim() || ''
   const payload = {
     approval_document_id: opts.approval.documentId,
     team_id: teamId,
     team_name: teamName,
     period_start: opts.approval.period_start,
     period_end: opts.approval.period_end,
+    comments,
     link: '/approvals',
   }
 
@@ -77,8 +79,8 @@ export async function notifyApprovalTransition(
     case 'return':
       type = 'approval_returned'
       title = `Approval returned — ${teamName}`
-      body = opts.comments?.trim()
-        ? `Period ${period}: ${opts.comments.trim()}`
+      body = comments
+        ? `Period ${period}: ${comments}`
         : `Period ${period} was returned for changes.`
       if (leaderId) recipients.add(leaderId)
       if (submittedBy) recipients.add(submittedBy)

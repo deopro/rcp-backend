@@ -2,6 +2,7 @@
  * Create in-app notifications and fan out to email/push channels.
  */
 import type { Core } from '@strapi/strapi'
+import { notificationCopy } from './copy'
 import { createEmailProvider } from './email-provider'
 import { createPushProvider } from './push-provider'
 import type { CreateNotificationInput, NotificationChannels, NotificationDto } from './types'
@@ -57,15 +58,19 @@ export async function createNotification(
 
   const user = await strapi.db.query('plugin::users-permissions.user').findOne({
     where: { id: input.userId },
-    select: ['id', 'email'],
+    select: ['id', 'email', 'preferred_locale'],
   })
+
+  const localized = notificationCopy(input.type, payload, user?.preferred_locale as string | undefined)
+  const title = localized.title || input.title
+  const body = localized.body || input.body || null
 
   const email = createEmailProvider()
   if (email.isConfigured() && user?.email) {
     const result = await email.send({
       to: user.email,
-      subject: input.title,
-      text: input.body || input.title,
+      subject: title,
+      text: body || title,
     })
     channels.email = result.ok ? 'sent' : 'failed'
   } else {
@@ -76,8 +81,8 @@ export async function createNotification(
   if (push.isConfigured()) {
     const result = await push.send({
       userId: input.userId,
-      title: input.title,
-      body: input.body || input.title,
+      title,
+      body: body || title,
       data: payload,
     })
     channels.push = result.ok ? 'sent' : 'failed'
@@ -89,8 +94,8 @@ export async function createNotification(
     data: {
       user: input.userId,
       type: input.type,
-      title: input.title,
-      body: input.body || null,
+      title,
+      body,
       payload,
       channels,
       read_at: null,

@@ -377,9 +377,9 @@ async function buildExecutiveReport(strapi: Core.Strapi, opts: ReportQuery) {
     { kpi: columnLabel('available', opts.locale), value: dashboard.kpis.available_hours },
     { kpi: columnLabel('allocated', opts.locale), value: dashboard.kpis.allocated_hours },
     { kpi: columnLabel('remaining', opts.locale), value: dashboard.kpis.remaining_hours },
-    { kpi: 'Active projects', value: dashboard.kpis.active_projects },
-    { kpi: 'Pending approvals', value: dashboard.kpis.pending_approvals },
-    { kpi: 'Pending leave', value: dashboard.kpis.pending_leave },
+    { kpi: columnLabel('active_projects', opts.locale), value: dashboard.kpis.active_projects },
+    { kpi: columnLabel('pending_approvals', opts.locale), value: dashboard.kpis.pending_approvals },
+    { kpi: columnLabel('pending_leave', opts.locale), value: dashboard.kpis.pending_leave },
   ]
 
   const teamRows = dashboard.charts.utilization_by_team.map((team) => ({
