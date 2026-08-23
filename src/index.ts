@@ -5,6 +5,7 @@ import { registerProjectRoutes } from './services/projects/register-routes'
 import { ensureAllocationPermissions } from './services/rbac/ensure-allocation-permissions'
 import { ensureOrgPermissions } from './services/rbac/ensure-org-permissions'
 import { ensureProjectPermissions } from './services/rbac/ensure-project-permissions'
+import { ensureLeavePermissions } from './services/rbac/ensure-leave-permissions'
 import { ensureSkillsPermissions } from './services/rbac/ensure-skills-permissions'
 import { ensureUserRelationPermissions } from './services/rbac/ensure-user-relation-permissions'
 import { ensureRcpRoles } from './services/rbac/ensure-roles'
@@ -20,6 +21,12 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
   const userType = strapi.contentType('plugin::users-permissions.user')
   userType.attributes = {
     ...userType.attributes,
+    first_name: {
+      type: 'string',
+    },
+    last_name: {
+      type: 'string',
+    },
     preferred_locale: {
       type: 'enumeration',
       enum: ['pt-PT', 'en'],
@@ -140,6 +147,7 @@ const bootstrap = async ({ strapi }: { strapi: Core.Strapi }) => {
     await ensureProjectPermissions(strapi)
     await ensureSkillsPermissions(strapi)
     await ensureAllocationPermissions(strapi)
+    await ensureLeavePermissions(strapi)
     await ensureUserRelationPermissions(strapi)
   } catch (error) {
     strapi.log.error('Failed to ensure RCP roles / permissions')

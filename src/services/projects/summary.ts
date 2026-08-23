@@ -1,7 +1,10 @@
 /**
- * Project capacity summary — weekdays only until holidays/leave (M6/M7).
+ * Project capacity summary — working days exclude weekends and holidays.
+ * Leave is employee-specific so project-level capacity uses holidays only.
  */
 import type { Core } from '@strapi/strapi'
+import { loadHolidayDates } from '../capacity/calculate'
+import { countWorkingDays, parseIsoDate, toIsoDate } from '../capacity/working-days'
 
 export type ProjectSummary = {
   project_id: number
@@ -15,29 +18,7 @@ export type ProjectSummary = {
   remaining_hours: number
 }
 
-function parseDate(value: string | Date | null | undefined): Date | null {
-  if (!value) return null
-  const d = value instanceof Date ? value : new Date(value)
-  return Number.isNaN(d.getTime()) ? null : d
-}
-
-export function countWeekdays(from: Date, to: Date): number {
-  const start = new Date(from)
-  start.setHours(0, 0, 0, 0)
-  const end = new Date(to)
-  end.setHours(0, 0, 0, 0)
-
-  if (end < start) return 0
-
-  let count = 0
-  const cur = new Date(start)
-  while (cur <= end) {
-    const day = cur.getDay()
-    if (day !== 0 && day !== 6) count++
-    cur.setDate(cur.getDate() + 1)
-  }
-  return count
-}
+export { countWeekdays } from '../capacity/working-days'
 
 export async function computeProjectSummary(
   strapi: Core.Strapi,
@@ -50,9 +31,13 @@ export async function computeProjectSummary(
 
   if (!project) return null
 
-  const start = parseDate(project.start_date) || new Date()
-  const end = parseDate(project.end_date) || start
-  const workingDays = countWeekdays(start, end)
+  const start = project.start_date ? parseIsoDate(project.start_date) : new Date()
+  const end = project.end_date ? parseIsoDate(project.end_date) : start
+  const fromIso = toIsoDate(start)
+  const toIso = toIsoDate(end)
+
+  const holidayDates = await loadHolidayDates(strapi, fromIso, toIso)
+  const workingDays = countWorkingDays(start, end, holidayDates)
 
   const employees = (project.assigned_employees || []).filter(
     (e: { status?: string }) => e.status !== 'inactive',
@@ -63,7 +48,6 @@ export async function computeProjectSummary(
     return sum + workingDays * daily
   }, 0)
 
-  // Allocations arrive in Milestone 6 — sum hours on assigned employees in project date range.
   let allocatedHours = 0
   if (employees.length && project.start_date && project.end_date) {
     const empIds = employees.map((e: { id: number }) => e.id)
