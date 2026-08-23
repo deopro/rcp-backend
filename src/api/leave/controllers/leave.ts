@@ -146,6 +146,10 @@ export default factories.createCoreController('api::leave.leave', ({ strapi }) =
 
     const roleType = await resolveRoleType(strapi, user)
 
+    if (roleType === 'team_leader') {
+      return ctx.forbidden()
+    }
+
     // Employees register pre-approved vacation days for themselves
     if (roleType === 'employee') {
       const employeeId = await ensureEmployeeForUser(strapi, user.id)
@@ -191,6 +195,10 @@ export default factories.createCoreController('api::leave.leave', ({ strapi }) =
       existing.employee?.id as number | undefined,
     )
     if (!allowed) return ctx.forbidden()
+
+    if (roleType === 'team_leader') {
+      return ctx.forbidden()
+    }
 
     if (roleType === 'employee') {
       if (body?.data) {
