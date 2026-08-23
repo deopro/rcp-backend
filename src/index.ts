@@ -7,6 +7,7 @@ import { registerDashboardRoutes } from './services/dashboard/register-routes'
 import { registerForecastRoutes } from './services/forecast/register-routes'
 import { registerOrgRoutes } from './services/org/register-routes'
 import { registerProjectRoutes } from './services/projects/register-routes'
+import { registerReportRoutes } from './services/reports/register-routes'
 import { ensureAllocationPermissions } from './services/rbac/ensure-allocation-permissions'
 import { ensureApprovalPermissions } from './services/rbac/ensure-approval-permissions'
 import { ensureOrgPermissions } from './services/rbac/ensure-org-permissions'
@@ -94,6 +95,7 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
   registerDashboardRoutes(strapi)
   registerForecastRoutes(strapi)
   registerAiRoutes(strapi)
+  registerReportRoutes(strapi)
 
   // content-api routes get users-permissions JWT auth; default server.routes() uses type "api" (no strategy).
   strapi.server.routes({
