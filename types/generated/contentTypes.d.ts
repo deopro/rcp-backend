@@ -423,6 +423,60 @@ export interface ApiAllocationAllocation extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiApprovalApproval extends Struct.CollectionTypeSchema {
+  collectionName: 'approvals';
+  info: {
+    description: 'Allocation period approval workflow for a team';
+    displayName: 'Approval';
+    pluralName: 'approvals';
+    singularName: 'approval';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    approved_at: Schema.Attribute.DateTime;
+    approved_by: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    comments: Schema.Attribute.Text;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::approval.approval'
+    > &
+      Schema.Attribute.Private;
+    locked_at: Schema.Attribute.DateTime;
+    locked_by: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    period_end: Schema.Attribute.Date & Schema.Attribute.Required;
+    period_start: Schema.Attribute.Date & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    returned_at: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<
+      ['draft', 'submitted', 'returned', 'approved', 'locked']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    submitted_at: Schema.Attribute.DateTime;
+    submitted_by: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    team: Schema.Attribute.Relation<'manyToOne', 'api::team.team'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiClientClient extends Struct.CollectionTypeSchema {
   collectionName: 'clients';
   info: {
@@ -1356,6 +1410,7 @@ declare module '@strapi/strapi' {
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
       'api::allocation.allocation': ApiAllocationAllocation;
+      'api::approval.approval': ApiApprovalApproval;
       'api::client.client': ApiClientClient;
       'api::department.department': ApiDepartmentDepartment;
       'api::employee-skill.employee-skill': ApiEmployeeSkillEmployeeSkill;

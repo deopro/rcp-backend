@@ -1,9 +1,11 @@
 import type { Core } from '@strapi/strapi'
 import { registerAllocationRoutes } from './services/allocations/register-routes'
+import { registerApprovalRoutes } from './services/approvals/register-routes'
 import { registerBenchRoutes } from './services/bench/register-routes'
 import { registerOrgRoutes } from './services/org/register-routes'
 import { registerProjectRoutes } from './services/projects/register-routes'
 import { ensureAllocationPermissions } from './services/rbac/ensure-allocation-permissions'
+import { ensureApprovalPermissions } from './services/rbac/ensure-approval-permissions'
 import { ensureOrgPermissions } from './services/rbac/ensure-org-permissions'
 import { ensureProjectPermissions } from './services/rbac/ensure-project-permissions'
 import { ensureLeavePermissions } from './services/rbac/ensure-leave-permissions'
@@ -44,6 +46,7 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
   registerProjectRoutes(strapi)
   registerAllocationRoutes(strapi)
   registerBenchRoutes(strapi)
+  registerApprovalRoutes(strapi)
 
   // content-api routes get users-permissions JWT auth; default server.routes() uses type "api" (no strategy).
   strapi.server.routes({
@@ -150,6 +153,7 @@ const bootstrap = async ({ strapi }: { strapi: Core.Strapi }) => {
     await ensureSkillsPermissions(strapi)
     await ensureAllocationPermissions(strapi)
     await ensureLeavePermissions(strapi)
+    await ensureApprovalPermissions(strapi)
     await ensureUserRelationPermissions(strapi)
   } catch (error) {
     strapi.log.error('Failed to ensure RCP roles / permissions')

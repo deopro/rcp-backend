@@ -1,5 +1,5 @@
 /**
- * Allocation controller — capacity validation and role scoping.
+ * Allocation controller — capacity validation, role scoping, period locks.
  */
 import { factories } from '@strapi/strapi'
 import { resolveRoleType } from '../../../utils/resolve-role-type'
@@ -9,6 +9,10 @@ import {
   extractAllocationFields,
   validateAllocationCapacity,
 } from '../../../services/allocations/validate'
+import {
+  assertAllocationNotLocked,
+  PeriodLockedError,
+} from '../../../services/approvals/lock'
 
 function capacityErrorResponse(
   ctx: { badRequest: (response?: string | object, details?: object) => unknown },
@@ -22,6 +26,17 @@ function capacityErrorResponse(
     allocated: err.allocated,
     requested: err.requested,
     excess: Math.round((err.allocated + err.requested - err.capacity) * 100) / 100,
+  })
+}
+
+function lockedErrorResponse(
+  ctx: { badRequest: (response?: string | object, details?: object) => unknown },
+  err: PeriodLockedError,
+) {
+  return ctx.badRequest('PERIOD_LOCKED', {
+    code: 'PERIOD_LOCKED',
+    team_id: err.teamId,
+    date: err.date,
   })
 }
 
@@ -65,6 +80,13 @@ export default factories.createCoreController('api::allocation.allocation', ({ s
       return ctx.badRequest('hours must be greater than 0')
     }
 
+    try {
+      await assertAllocationNotLocked(strapi, fields.employeeId, fields.date)
+    } catch (e) {
+      if (e instanceof PeriodLockedError) return lockedErrorResponse(ctx, e)
+      throw e
+    }
+
     const dup = await assertUniqueAllocation(
       strapi,
       fields.employeeId,
@@ -106,6 +128,13 @@ export default factories.createCoreController('api::allocation.allocation', ({ s
     const date = incoming.date || existing.allocation_date
     const hours = incoming.hours || Number(existing.hours)
 
+    try {
+      await assertAllocationNotLocked(strapi, employeeId!, date!)
+    } catch (e) {
+      if (e instanceof PeriodLockedError) return lockedErrorResponse(ctx, e)
+      throw e
+    }
+
     if (employeeId && projectId && date) {
       const dup = await assertUniqueAllocation(strapi, employeeId, projectId, date, documentId)
       if (dup) return ctx.badRequest(dup)
@@ -123,5 +152,27 @@ export default factories.createCoreController('api::allocation.allocation', ({ s
     }
 
     return await super.update(ctx)
+  },
+
+  async delete(ctx) {
+    const documentId = ctx.params.id as string
+    const existing = await strapi.db.query('api::allocation.allocation').findOne({
+      where: { documentId },
+      populate: ['employee'],
+    })
+    if (!existing) return ctx.notFound()
+
+    try {
+      await assertAllocationNotLocked(
+        strapi,
+        existing.employee?.id,
+        existing.allocation_date,
+      )
+    } catch (e) {
+      if (e instanceof PeriodLockedError) return lockedErrorResponse(ctx, e)
+      throw e
+    }
+
+    return await super.delete(ctx)
   },
 }))

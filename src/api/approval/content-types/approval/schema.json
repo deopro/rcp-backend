@@ -1,0 +1,65 @@
+{
+  "kind": "collectionType",
+  "collectionName": "approvals",
+  "info": {
+    "singularName": "approval",
+    "pluralName": "approvals",
+    "displayName": "Approval",
+    "description": "Allocation period approval workflow for a team"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "team": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::team.team",
+      "required": true
+    },
+    "period_start": {
+      "type": "date",
+      "required": true
+    },
+    "period_end": {
+      "type": "date",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["draft", "submitted", "returned", "approved", "locked"],
+      "default": "draft",
+      "required": true
+    },
+    "comments": {
+      "type": "text"
+    },
+    "submitted_by": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "approved_by": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "locked_by": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "submitted_at": {
+      "type": "datetime"
+    },
+    "approved_at": {
+      "type": "datetime"
+    },
+    "locked_at": {
+      "type": "datetime"
+    },
+    "returned_at": {
+      "type": "datetime"
+    }
+  }
+}
