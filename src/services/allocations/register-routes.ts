@@ -4,6 +4,13 @@
 import type { Core } from '@strapi/strapi'
 import { computeCapacity } from '../capacity/calculate'
 import { copyAllocations } from './copy'
+import {
+  findDepartmentIdsForManager,
+  findEmployeeIdForUser,
+  findEmployeeIdsInTeams,
+  findTeamIdsForLeader,
+  findTeamIdsInDepartments,
+} from '../../utils/employee-scope'
 import { resolveRoleType } from '../../utils/resolve-role-type'
 
 export function registerAllocationRoutes(strapi: Core.Strapi) {
@@ -67,13 +74,21 @@ export function registerAllocationRoutes(strapi: Core.Strapi) {
           }
 
           if (roleType === 'employee') {
-            allocWhere.employee = { user: { id: user.id } }
+            const employeeId = await findEmployeeIdForUser(strapi, user.id)
+            allocWhere.employee = employeeId ?? { id: { $in: [] } }
           } else if (roleType === 'team_leader') {
-            allocWhere.employee = { team: { team_leader: { id: user.id } } }
+            const teamIds = await findTeamIdsForLeader(strapi, user.id)
+            const employeeIds = await findEmployeeIdsInTeams(strapi, teamIds)
+            allocWhere.employee = employeeIds.length
+              ? { id: { $in: employeeIds } }
+              : { id: { $in: [] } }
           } else if (roleType === 'department_manager') {
-            allocWhere.employee = {
-              team: { department: { manager: { id: user.id } } },
-            }
+            const departmentIds = await findDepartmentIdsForManager(strapi, user.id)
+            const teamIds = await findTeamIdsInDepartments(strapi, departmentIds)
+            const employeeIds = await findEmployeeIdsInTeams(strapi, teamIds)
+            allocWhere.employee = employeeIds.length
+              ? { id: { $in: employeeIds } }
+              : { id: { $in: [] } }
           } else if (query.team) {
             allocWhere.employee = { team: Number(query.team) }
           }

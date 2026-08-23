@@ -2,6 +2,7 @@
  * Grant Users & Permissions actions for organization content-types.
  */
 import type { Core } from '@strapi/strapi'
+import { syncContentTypePermissions } from './sync-content-type-permissions'
 
 const ORG_UIDS = [
   'api::department.department',
@@ -10,6 +11,7 @@ const ORG_UIDS = [
 ] as const
 
 const ACTIONS = ['find', 'findOne', 'create', 'update', 'delete'] as const
+const READ = ['find', 'findOne'] as const
 
 /** Role type → allowed actions per content-type (simplified M3 matrix) */
 const ROLE_MATRIX: Record<string, Partial<Record<(typeof ORG_UIDS)[number], readonly string[]>>> = {
@@ -19,64 +21,37 @@ const ROLE_MATRIX: Record<string, Partial<Record<(typeof ORG_UIDS)[number], read
     'api::employee.employee': ACTIONS,
   },
   executive: {
-    'api::department.department': ['find', 'findOne'],
-    'api::team.team': ['find', 'findOne'],
-    'api::employee.employee': ['find', 'findOne'],
+    'api::department.department': READ,
+    'api::team.team': READ,
+    'api::employee.employee': READ,
   },
   department_manager: {
-    'api::department.department': ['find', 'findOne'],
+    'api::department.department': READ,
     'api::team.team': ['find', 'findOne', 'create', 'update'],
     'api::employee.employee': ['find', 'findOne', 'create', 'update'],
   },
   team_leader: {
-    'api::department.department': ['find', 'findOne'],
-    'api::team.team': ['find', 'findOne', 'update'],
+    'api::department.department': READ,
+    'api::team.team': READ,
     'api::employee.employee': ['find', 'findOne', 'create', 'update'],
   },
   employee: {
-    'api::department.department': ['find', 'findOne'],
-    'api::team.team': ['find', 'findOne'],
-    'api::employee.employee': ['find', 'findOne'],
+    'api::department.department': READ,
+    'api::team.team': READ,
+    'api::employee.employee': READ,
   },
   authenticated: {
-    'api::department.department': ['find', 'findOne'],
-    'api::team.team': ['find', 'findOne'],
-    'api::employee.employee': ['find', 'findOne'],
+    'api::department.department': READ,
+    'api::team.team': READ,
+    'api::employee.employee': READ,
   },
 }
 
 export async function ensureOrgPermissions(strapi: Core.Strapi): Promise<void> {
   for (const [roleType, matrix] of Object.entries(ROLE_MATRIX)) {
-    const role = await strapi.db.query('plugin::users-permissions.role').findOne({
-      where: { type: roleType },
-    })
-    if (!role) {
-      continue
+    for (const uid of ORG_UIDS) {
+      await syncContentTypePermissions(strapi, roleType, uid, matrix[uid] || [])
     }
-
-    for (const [uid, actions] of Object.entries(matrix)) {
-      for (const action of actions || []) {
-        const actionId = `${uid}.${action}`
-        const existing = await strapi.db.query('plugin::users-permissions.permission').findOne({
-          where: {
-            action: actionId,
-            role: role.id,
-          },
-        })
-
-        if (existing) {
-          continue
-        }
-
-        await strapi.db.query('plugin::users-permissions.permission').create({
-          data: {
-            action: actionId,
-            role: role.id,
-          },
-        })
-      }
-    }
-
     strapi.log.info(`Ensured org permissions for role: ${roleType}`)
   }
 }

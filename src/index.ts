@@ -2,6 +2,7 @@ import type { Core } from '@strapi/strapi'
 import { registerAllocationRoutes } from './services/allocations/register-routes'
 import { registerApprovalRoutes } from './services/approvals/register-routes'
 import { registerBenchRoutes } from './services/bench/register-routes'
+import { registerDashboardRoutes } from './services/dashboard/register-routes'
 import { registerOrgRoutes } from './services/org/register-routes'
 import { registerProjectRoutes } from './services/projects/register-routes'
 import { ensureAllocationPermissions } from './services/rbac/ensure-allocation-permissions'
@@ -12,6 +13,7 @@ import { ensureLeavePermissions } from './services/rbac/ensure-leave-permissions
 import { ensureSkillsPermissions } from './services/rbac/ensure-skills-permissions'
 import { ensureUserRelationPermissions } from './services/rbac/ensure-user-relation-permissions'
 import { ensureRcpRoles } from './services/rbac/ensure-roles'
+import { syncEmployeeRoleUsers } from './utils/employee-scope'
 import { getAuthMode } from './utils/auth-mode'
 
 function sanitizeUser(user: Record<string, unknown>) {
@@ -42,11 +44,52 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
     },
   }
 
+  const employeeType = strapi.contentType('api::employee.employee')
+  employeeType.attributes = {
+    ...employeeType.attributes,
+    user: {
+      type: 'relation',
+      relation: 'oneToOne',
+      target: 'plugin::users-permissions.user',
+    },
+  }
+
+  const teamType = strapi.contentType('api::team.team')
+  teamType.attributes = {
+    ...teamType.attributes,
+    team_leader: {
+      type: 'relation',
+      relation: 'manyToOne',
+      target: 'plugin::users-permissions.user',
+    },
+  }
+
+  const departmentType = strapi.contentType('api::department.department')
+  departmentType.attributes = {
+    ...departmentType.attributes,
+    manager: {
+      type: 'relation',
+      relation: 'manyToOne',
+      target: 'plugin::users-permissions.user',
+    },
+  }
+
+  const leaveType = strapi.contentType('api::leave.leave')
+  leaveType.attributes = {
+    ...leaveType.attributes,
+    reviewed_by: {
+      type: 'relation',
+      relation: 'manyToOne',
+      target: 'plugin::users-permissions.user',
+    },
+  }
+
   registerOrgRoutes(strapi)
   registerProjectRoutes(strapi)
   registerAllocationRoutes(strapi)
   registerBenchRoutes(strapi)
   registerApprovalRoutes(strapi)
+  registerDashboardRoutes(strapi)
 
   // content-api routes get users-permissions JWT auth; default server.routes() uses type "api" (no strategy).
   strapi.server.routes({
@@ -155,6 +198,7 @@ const bootstrap = async ({ strapi }: { strapi: Core.Strapi }) => {
     await ensureLeavePermissions(strapi)
     await ensureApprovalPermissions(strapi)
     await ensureUserRelationPermissions(strapi)
+    await syncEmployeeRoleUsers(strapi)
   } catch (error) {
     strapi.log.error('Failed to ensure RCP roles / permissions')
     strapi.log.error(error)
