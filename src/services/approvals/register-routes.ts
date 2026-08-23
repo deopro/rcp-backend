@@ -4,6 +4,7 @@
 import type { Core } from '@strapi/strapi'
 import { resolveRoleType } from '../../utils/resolve-role-type'
 import { transitionApproval, type ApprovalStatus } from './workflow'
+import { notifyApprovalTransition } from '../notifications/approval-hooks'
 
 async function canActOnApproval(
   strapi: Core.Strapi,
@@ -59,7 +60,7 @@ export function registerApprovalRoutes(strapi: Core.Strapi) {
 
         const approval = await strapi.db.query('api::approval.approval').findOne({
           where: { documentId },
-          populate: ['team'],
+          populate: ['team', 'submitted_by'],
         })
         if (!approval) return ctx.notFound()
 
@@ -81,6 +82,18 @@ export function registerApprovalRoutes(strapi: Core.Strapi) {
         if (result.error === 'not_found') return ctx.notFound()
         if (result.error === 'invalid_transition') {
           return ctx.badRequest(`Cannot transition from ${result.from} to ${result.to}`)
+        }
+
+        try {
+          await notifyApprovalTransition(strapi, {
+            action,
+            approval: result.approval || approval,
+            actorUserId: user.id,
+            comments: body?.comments,
+          })
+        } catch (error) {
+          strapi.log.warn('Failed to send approval notification')
+          strapi.log.warn(error)
         }
 
         ctx.body = {

@@ -58,11 +58,39 @@ export function registerAiRoutes(strapi: Core.Strapi) {
         path: '/ai/recommendations',
         info: {},
         handler: async (ctx) => {
+          const debugLog = (message: string, data: Record<string, unknown>, hypothesisId: string) => {
+            const payload = JSON.stringify({
+              sessionId: '63ba08',
+              location: 'services/ai/register-routes.ts:recommend',
+              message,
+              data,
+              timestamp: Date.now(),
+              hypothesisId,
+            })
+            for (const url of [
+              'http://127.0.0.1:7550/ingest/00e40e9f-34c6-4349-ac97-bfda2cfa152b',
+              'http://host.docker.internal:7550/ingest/00e40e9f-34c6-4349-ac97-bfda2cfa152b',
+            ]) {
+              fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '63ba08' },
+                body: payload,
+              }).catch(() => undefined)
+            }
+          }
+
+          try {
           const user = ctx.state.user as { id: number; preferred_locale?: string } | undefined
-          if (!user) return ctx.unauthorized()
+          if (!user) {
+            debugLog('unauthorized', { hasUser: false }, 'H1')
+            return ctx.unauthorized()
+          }
 
           const roleType = await resolveRoleType(strapi, user)
-          if (!canUseAi(roleType)) return ctx.forbidden()
+          if (!canUseAi(roleType)) {
+            debugLog('forbidden role', { userId: user.id, roleType }, 'H1')
+            return ctx.forbidden()
+          }
 
           const body = ctx.request.body as {
             project_id?: number
@@ -73,8 +101,11 @@ export function registerAiRoutes(strapi: Core.Strapi) {
             locale?: string
           }
 
+          debugLog('recommend start', { userId: user.id, roleType, projectId: body?.project_id, from: body?.from, to: body?.to, hasTeam: Boolean(body?.team_id) }, 'H3')
+
           const projectId = num(body?.project_id)
           if (!projectId || !body?.from || !body?.to) {
+            debugLog('bad request missing fields', { projectId, from: body?.from, to: body?.to }, 'H3')
             return ctx.badRequest('project_id, from, and to are required')
           }
 
@@ -88,7 +119,11 @@ export function registerAiRoutes(strapi: Core.Strapi) {
             roleType,
           })
 
-          if (!result) return ctx.notFound('Project not found or not accessible')
+          if (!result) {
+            debugLog('project not found or not accessible', { projectId, userId: user.id, roleType }, 'H1')
+            return ctx.notFound('Project not found or not accessible')
+          }
+          debugLog('matchResources ok', { matchCount: result.session.matches.length, candidates: result.summary.candidates }, 'H5')
 
           const provider = createAiProvider()
           const locale = body.locale || user.preferred_locale || 'en'
@@ -135,6 +170,12 @@ export function registerAiRoutes(strapi: Core.Strapi) {
           }
 
           ctx.body = { data: payload }
+          debugLog('recommend success', { recommendationId: payload.recommendation_id, matchCount: matches.length, provider: provider.name }, 'H5')
+          } catch (error) {
+            const err = error as { message?: string; name?: string; stack?: string }
+            debugLog('recommend threw', { name: err?.name, msg: err?.message, stack: err?.stack?.slice(0, 800) }, 'H5')
+            throw error
+          }
         },
         config: { auth: { scope: [] } },
       },
