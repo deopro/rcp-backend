@@ -32,7 +32,6 @@ const ROLE_MATRIX: Record<
   },
   authenticated: {
     'api::holiday.holiday': READ,
-    'api::leave.leave': READ,
   },
 }
 

@@ -3,7 +3,10 @@
  */
 import type { Core } from '@strapi/strapi'
 import { factories } from '@strapi/strapi'
-import { scopeEmployeeRelationFilters } from '../../../utils/employee-scope'
+import {
+  findEmployeeIdForUser,
+  scopeEmployeeRelationFilters,
+} from '../../../utils/employee-scope'
 import { resolveRoleType } from '../../../utils/resolve-role-type'
 const LEVELS = new Set(['basic', 'intermediate', 'advanced', 'expert'])
 
@@ -67,10 +70,24 @@ export default factories.createCoreController('api::employee-skill.employee-skil
       filters,
     )
 
-    return await super.find(ctx)  },
+    return await super.find(ctx)
+  },
 
   async create(ctx) {
+    const user = ctx.state.user as { id: number } | undefined
+    if (!user) return ctx.unauthorized()
+
     const body = ctx.request.body as { data?: Record<string, unknown> }
+    const roleType = await resolveRoleType(strapi, user)
+
+    if (roleType === 'employee') {
+      const ownId = await findEmployeeIdForUser(strapi, user.id)
+      if (!ownId) return ctx.badRequest('No employee record linked to this user')
+      if (body?.data) {
+        body.data.employee = ownId
+      }
+    }
+
     if (body?.data) {
       body.data.proficiency_level = normalizeLevel(body.data.proficiency_level)
       body.data.years_experience = normalizeYears(body.data.years_experience)
@@ -86,8 +103,25 @@ export default factories.createCoreController('api::employee-skill.employee-skil
   },
 
   async update(ctx) {
+    const user = ctx.state.user as { id: number } | undefined
+    if (!user) return ctx.unauthorized()
+
     const body = ctx.request.body as { data?: Record<string, unknown> }
     const documentId = ctx.params.id as string
+
+    const roleType = await resolveRoleType(strapi, user)
+    if (roleType === 'employee') {
+      const existing = await strapi.db.query('api::employee-skill.employee-skill').findOne({
+        where: { documentId },
+        populate: ['employee'],
+      })
+      if (!existing) return ctx.notFound()
+      const ownId = await findEmployeeIdForUser(strapi, user.id)
+      if (!ownId || existing.employee?.id !== ownId) return ctx.forbidden()
+      if (body?.data) {
+        delete body.data.employee
+      }
+    }
 
     if (body?.data) {
       if (body.data.proficiency_level !== undefined) {
@@ -105,5 +139,25 @@ export default factories.createCoreController('api::employee-skill.employee-skil
       }
     }
     return await super.update(ctx)
+  },
+
+  async delete(ctx) {
+    const user = ctx.state.user as { id: number } | undefined
+    if (!user) return ctx.unauthorized()
+
+    const documentId = ctx.params.id as string
+    const roleType = await resolveRoleType(strapi, user)
+
+    if (roleType === 'employee') {
+      const existing = await strapi.db.query('api::employee-skill.employee-skill').findOne({
+        where: { documentId },
+        populate: ['employee'],
+      })
+      if (!existing) return ctx.notFound()
+      const ownId = await findEmployeeIdForUser(strapi, user.id)
+      if (!ownId || existing.employee?.id !== ownId) return ctx.forbidden()
+    }
+
+    return await super.delete(ctx)
   },
 }))

@@ -33,7 +33,7 @@ const ROLE_MATRIX: Record<
   },
   employee: {
     'api::skill-category.skill-category': READ,
-    'api::employee-skill.employee-skill': READ,
+    'api::employee-skill.employee-skill': ['find', 'findOne', 'create', 'update', 'delete'],
   },
   authenticated: {
     'api::skill-category.skill-category': READ,

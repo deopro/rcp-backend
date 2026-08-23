@@ -2,7 +2,11 @@
  * Allocation controller — capacity validation, role scoping, period locks.
  */
 import { factories } from '@strapi/strapi'
-import { scopeEmployeeRelationFilters } from '../../../utils/employee-scope'
+import {
+  findEmployeeIdForUser,
+  isEmployeeAssignedToProject,
+  scopeEmployeeRelationFilters,
+} from '../../../utils/employee-scope'
 import { resolveRoleType } from '../../../utils/resolve-role-type'
 import {
   assertUniqueAllocation,
@@ -62,6 +66,8 @@ export default factories.createCoreController('api::allocation.allocation', ({ s
 
   async create(ctx) {
     const user = ctx.state.user as { id: number } | undefined
+    if (!user) return ctx.unauthorized()
+
     const body = ctx.request.body as { data?: Record<string, unknown> }
     const fields = extractAllocationFields(body?.data || {})
 
@@ -70,6 +76,15 @@ export default factories.createCoreController('api::allocation.allocation', ({ s
     }
     if (fields.hours <= 0) {
       return ctx.badRequest('hours must be greater than 0')
+    }
+
+    const roleType = await resolveRoleType(strapi, user)
+    if (roleType === 'employee') {
+      const ownId = await findEmployeeIdForUser(strapi, user.id)
+      if (!ownId) return ctx.badRequest('No employee record linked to this user')
+      if (fields.employeeId !== ownId) return ctx.forbidden()
+      const assigned = await isEmployeeAssignedToProject(strapi, ownId, fields.projectId)
+      if (!assigned) return ctx.forbidden('Project not assigned to this employee')
     }
 
     try {
@@ -105,6 +120,8 @@ export default factories.createCoreController('api::allocation.allocation', ({ s
 
   async update(ctx) {
     const user = ctx.state.user as { id: number } | undefined
+    if (!user) return ctx.unauthorized()
+
     const documentId = ctx.params.id as string
     const body = ctx.request.body as { data?: Record<string, unknown> }
 
@@ -114,11 +131,34 @@ export default factories.createCoreController('api::allocation.allocation', ({ s
     })
     if (!existing) return ctx.notFound()
 
+    const roleType = await resolveRoleType(strapi, user)
+    if (roleType === 'employee') {
+      const ownId = await findEmployeeIdForUser(strapi, user.id)
+      if (!ownId || existing.employee?.id !== ownId) return ctx.forbidden()
+      if (existing.status !== 'draft') {
+        return ctx.badRequest('Only draft allocations can be edited')
+      }
+      if (body?.data) {
+        delete body.data.employee
+        delete body.data.status
+      }
+    }
+
     const incoming = extractAllocationFields({ ...existing, ...body?.data })
     const employeeId = incoming.employeeId || existing.employee?.id
     const projectId = incoming.projectId || existing.project?.id
     const date = incoming.date || existing.allocation_date
     const hours = incoming.hours || Number(existing.hours)
+
+    if (roleType === 'employee') {
+      const projectId = incoming.projectId || existing.project?.id
+      if (projectId) {
+        const ownId = await findEmployeeIdForUser(strapi, user.id)
+        const assigned =
+          ownId != null && (await isEmployeeAssignedToProject(strapi, ownId, projectId))
+        if (!assigned) return ctx.forbidden('Project not assigned to this employee')
+      }
+    }
 
     try {
       await assertAllocationNotLocked(strapi, employeeId!, date!)
@@ -147,12 +187,24 @@ export default factories.createCoreController('api::allocation.allocation', ({ s
   },
 
   async delete(ctx) {
+    const user = ctx.state.user as { id: number } | undefined
+    if (!user) return ctx.unauthorized()
+
     const documentId = ctx.params.id as string
     const existing = await strapi.db.query('api::allocation.allocation').findOne({
       where: { documentId },
       populate: ['employee'],
     })
     if (!existing) return ctx.notFound()
+
+    const roleType = await resolveRoleType(strapi, user)
+    if (roleType === 'employee') {
+      const ownId = await findEmployeeIdForUser(strapi, user.id)
+      if (!ownId || existing.employee?.id !== ownId) return ctx.forbidden()
+      if (existing.status !== 'draft') {
+        return ctx.badRequest('Only draft allocations can be deleted')
+      }
+    }
 
     try {
       await assertAllocationNotLocked(

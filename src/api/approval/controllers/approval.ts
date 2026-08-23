@@ -2,6 +2,7 @@
  * Approval controller — list scoping + create validation.
  */
 import { factories } from '@strapi/strapi'
+import { scopeTeamRelationFilters } from '../../../utils/employee-scope'
 import { resolveRoleType } from '../../../utils/resolve-role-type'
 
 function relationId(value: unknown): number | undefined {
@@ -22,14 +23,13 @@ export default factories.createCoreController('api::approval.approval', ({ strap
     const roleType = await resolveRoleType(strapi, user)
     const filters = { ...(ctx.query.filters as object | undefined) }
 
-    if (roleType === 'team_leader') {
-      ctx.query.filters = {
-        $and: [filters, { team: { team_leader: { id: { $eq: user.id } } } }],
-      }
-    } else if (roleType === 'department_manager') {
-      ctx.query.filters = {
-        $and: [filters, { team: { department: { manager: { id: { $eq: user.id } } } } }],
-      }
+    if (roleType === 'team_leader' || roleType === 'department_manager') {
+      ctx.query.filters = await scopeTeamRelationFilters(
+        strapi,
+        roleType,
+        user.id,
+        filters,
+      )
     } else if (roleType === 'employee') {
       ctx.body = {
         data: [],

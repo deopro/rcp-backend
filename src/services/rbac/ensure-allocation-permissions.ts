@@ -12,7 +12,7 @@ const ROLE_MATRIX: Record<string, readonly string[]> = {
   executive: READ,
   department_manager: ['find', 'findOne', 'create', 'update'],
   team_leader: ['find', 'findOne', 'create', 'update'],
-  employee: READ,
+  employee: ['find', 'findOne', 'create', 'update', 'delete'],
   authenticated: READ,
 }
 

@@ -13,6 +13,7 @@ import { ensureLeavePermissions } from './services/rbac/ensure-leave-permissions
 import { ensureSkillsPermissions } from './services/rbac/ensure-skills-permissions'
 import { ensureUserRelationPermissions } from './services/rbac/ensure-user-relation-permissions'
 import { ensureRcpRoles } from './services/rbac/ensure-roles'
+import { syncEmployeeRoleUsers } from './utils/employee-scope'
 import { getAuthMode } from './utils/auth-mode'
 
 function sanitizeUser(user: Record<string, unknown>) {
@@ -49,6 +50,36 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
     user: {
       type: 'relation',
       relation: 'oneToOne',
+      target: 'plugin::users-permissions.user',
+    },
+  }
+
+  const teamType = strapi.contentType('api::team.team')
+  teamType.attributes = {
+    ...teamType.attributes,
+    team_leader: {
+      type: 'relation',
+      relation: 'manyToOne',
+      target: 'plugin::users-permissions.user',
+    },
+  }
+
+  const departmentType = strapi.contentType('api::department.department')
+  departmentType.attributes = {
+    ...departmentType.attributes,
+    manager: {
+      type: 'relation',
+      relation: 'manyToOne',
+      target: 'plugin::users-permissions.user',
+    },
+  }
+
+  const leaveType = strapi.contentType('api::leave.leave')
+  leaveType.attributes = {
+    ...leaveType.attributes,
+    reviewed_by: {
+      type: 'relation',
+      relation: 'manyToOne',
       target: 'plugin::users-permissions.user',
     },
   }
@@ -167,6 +198,7 @@ const bootstrap = async ({ strapi }: { strapi: Core.Strapi }) => {
     await ensureLeavePermissions(strapi)
     await ensureApprovalPermissions(strapi)
     await ensureUserRelationPermissions(strapi)
+    await syncEmployeeRoleUsers(strapi)
   } catch (error) {
     strapi.log.error('Failed to ensure RCP roles / permissions')
     strapi.log.error(error)
