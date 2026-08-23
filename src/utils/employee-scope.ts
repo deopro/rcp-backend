@@ -351,13 +351,17 @@ export async function findProjectScopeEmployeeIds(
 
   if (roleType === 'team_leader') {
     const teamIds = await findTeamIdsForLeader(strapi, userId)
-    return findEmployeeIdsInTeams(strapi, teamIds)
+    const memberIds = await findEmployeeIdsInTeams(strapi, teamIds)
+    const ownId = await findEmployeeIdForUser(strapi, userId)
+    return [...new Set([...memberIds, ...(ownId ? [ownId] : [])])]
   }
 
   if (roleType === 'department_manager') {
     const departmentIds = await findDepartmentIdsForManager(strapi, userId)
     const teamIds = await findTeamIdsInDepartments(strapi, departmentIds)
-    return findEmployeeIdsInTeams(strapi, teamIds)
+    const memberIds = await findEmployeeIdsInTeams(strapi, teamIds)
+    const ownId = await findEmployeeIdForUser(strapi, userId)
+    return [...new Set([...memberIds, ...(ownId ? [ownId] : [])])]
   }
 
   return []
@@ -506,6 +510,21 @@ export function extractRelationId(data: Record<string, unknown>, key: string): n
     }
   }
   return null
+}
+
+/** Persist a users-permissions user relation (REST connect is unreliable for plugin users). */
+export async function persistUserRelation(
+  strapi: Core.Strapi,
+  uid: string,
+  documentId: string | undefined,
+  field: string,
+  userId: number | null,
+): Promise<void> {
+  if (!documentId || userId == null) return
+  await strapi.db.query(uid).update({
+    where: { documentId },
+    data: { [field]: userId },
+  })
 }
 
 /** Whether a user may assign an employee to the given team. */
