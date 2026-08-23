@@ -1,0 +1,52 @@
+{
+  "kind": "collectionType",
+  "collectionName": "leaves",
+  "info": {
+    "singularName": "leave",
+    "pluralName": "leaves",
+    "displayName": "Leave",
+    "description": "Employee leave request that reduces available capacity when approved"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "employee": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::employee.employee",
+      "required": true
+    },
+    "start_date": {
+      "type": "date",
+      "required": true
+    },
+    "end_date": {
+      "type": "date",
+      "required": true
+    },
+    "leave_type": {
+      "type": "enumeration",
+      "enum": ["annual", "sick", "unpaid", "other"],
+      "default": "annual",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "approved", "rejected"],
+      "default": "pending",
+      "required": true
+    },
+    "notes": {
+      "type": "text"
+    },
+    "reviewed_by": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "reviewed_at": {
+      "type": "datetime"
+    }
+  }
+}

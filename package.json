@@ -10,6 +10,7 @@
     "develop": "strapi develop",
     "start": "strapi start",
     "strapi": "strapi",
+    "test": "node --experimental-strip-types --test tests/**/*.test.ts",
     "upgrade": "npx @strapi/upgrade latest"
   },
   "dependencies": {

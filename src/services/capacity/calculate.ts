@@ -1,13 +1,21 @@
 /**
- * Capacity calculation — per employee per day (M6).
- * Holidays and leave sets are empty until Milestone 7.
+ * Capacity calculation — per employee per day.
+ * Available hours exclude weekends, public holidays, and approved leave.
  */
 import type { Core } from '@strapi/strapi'
-import { eachDay, isWorkingDay, parseIsoDate, toIsoDate } from './working-days'
+import {
+  eachDay,
+  expandDateRangeToIso,
+  isWorkingDay,
+  parseIsoDate,
+  toIsoDate,
+} from './working-days'
 
 export type DayCapacity = {
   date: string
   is_working_day: boolean
+  is_holiday: boolean
+  is_leave: boolean
   daily_capacity: number
   available_hours: number
   allocated_hours: number
@@ -26,6 +34,7 @@ export type EmployeeCapacityRow = {
 export type CapacityResult = {
   from: string
   to: string
+  holiday_dates: string[]
   employees: EmployeeCapacityRow[]
 }
 
@@ -35,19 +44,59 @@ type AllocationRow = {
   employee?: { id: number }
 }
 
-async function loadHolidayDates(_strapi: Core.Strapi): Promise<Set<string>> {
-  // Milestone 7 — stub returns empty
-  return new Set()
+type LeaveRow = {
+  start_date: string
+  end_date: string
+  employee?: { id: number }
 }
 
-async function loadLeaveDates(
-  _strapi: Core.Strapi,
-  _employeeIds: number[],
-  _from: string,
-  _to: string,
+export async function loadHolidayDates(
+  strapi: Core.Strapi,
+  from: string,
+  to: string,
+): Promise<Set<string>> {
+  const rows = await strapi.db.query('api::holiday.holiday').findMany({
+    where: {
+      date: { $gte: from, $lte: to },
+    },
+  })
+  return new Set(rows.map((r: { date: string }) => String(r.date).slice(0, 10)))
+}
+
+export async function loadLeaveDates(
+  strapi: Core.Strapi,
+  employeeIds: number[],
+  from: string,
+  to: string,
 ): Promise<Map<number, Set<string>>> {
-  // Milestone 7 — stub returns empty per employee
-  return new Map()
+  const map = new Map<number, Set<string>>()
+  if (!employeeIds.length) return map
+
+  const leaves = (await strapi.db.query('api::leave.leave').findMany({
+    where: {
+      status: 'approved',
+      employee: { id: { $in: employeeIds } },
+      start_date: { $lte: to },
+      end_date: { $gte: from },
+    },
+    populate: ['employee'],
+  })) as LeaveRow[]
+
+  for (const leave of leaves) {
+    const empId = leave.employee?.id
+    if (!empId) continue
+    const dates = expandDateRangeToIso(leave.start_date, leave.end_date)
+    let set = map.get(empId)
+    if (!set) {
+      set = new Set()
+      map.set(empId, set)
+    }
+    for (const iso of dates) {
+      if (iso >= from && iso <= to) set.add(iso)
+    }
+  }
+
+  return map
 }
 
 async function loadAllocatedHours(
@@ -116,7 +165,7 @@ export async function computeCapacity(
 
   const ids = employees.map((e: { id: number }) => e.id)
   const [holidayDates, leaveByEmployee, allocatedMap] = await Promise.all([
-    loadHolidayDates(strapi),
+    loadHolidayDates(strapi, fromIso, toIso),
     loadLeaveDates(strapi, ids, fromIso, toIso),
     loadAllocatedHours(strapi, ids, fromIso, toIso),
   ])
@@ -136,6 +185,8 @@ export async function computeCapacity(
 
       const days: DayCapacity[] = calendarDays.map((day) => {
         const iso = toIsoDate(day)
+        const isHoliday = holidayDates.has(iso)
+        const isLeave = leaveDates.has(iso)
         const working = isWorkingDay(day, holidayDates, leaveDates)
         const available = working ? daily : 0
         const allocated = allocatedMap.get(`${employee.id}:${iso}`) || 0
@@ -144,6 +195,8 @@ export async function computeCapacity(
         return {
           date: iso,
           is_working_day: working,
+          is_holiday: isHoliday,
+          is_leave: isLeave,
           daily_capacity: daily,
           available_hours: available,
           allocated_hours: Math.round(allocated * 100) / 100,
@@ -162,5 +215,10 @@ export async function computeCapacity(
     },
   )
 
-  return { from: fromIso, to: toIso, employees: rows }
+  return {
+    from: fromIso,
+    to: toIso,
+    holiday_dates: [...holidayDates].sort(),
+    employees: rows,
+  }
 }
