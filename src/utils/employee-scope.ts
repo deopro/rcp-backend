@@ -168,6 +168,11 @@ function idsFilter(base: object, ids: number[]): object {
   return { $and: [base, { id: { $in: ids } }] }
 }
 
+function documentIdsFilter(base: object, documentIds: string[]): object {
+  if (!documentIds.length) return emptyResultFilters(base)
+  return { $and: [base, { documentId: { $in: documentIds } }] }
+}
+
 /** Scope filters for the team collection. */
 export async function scopeTeamFilters(
   strapi: Core.Strapi,
@@ -341,16 +346,7 @@ export async function findProjectScopeEmployeeIds(
 ): Promise<number[]> {
   if (roleType === 'employee') {
     const employeeId = await findEmployeeIdForUser(strapi, userId)
-    if (!employeeId) return []
-
-    const employee = await strapi.db.query('api::employee.employee').findOne({
-      where: { id: employeeId },
-      populate: ['team'],
-    })
-    const teamId = employee?.team?.id as number | undefined
-    if (!teamId) return [employeeId]
-
-    return findEmployeeIdsInTeams(strapi, [teamId])
+    return employeeId ? [employeeId] : []
   }
 
   if (roleType === 'team_leader') {
@@ -367,7 +363,56 @@ export async function findProjectScopeEmployeeIds(
   return []
 }
 
-/** Scope project lists via assigned employee ids. */
+type VisibleProjects = { ids: number[]; documentIds: string[] }
+
+/**
+ * Projects visible to scoped roles.
+ * Uses db.query (M2M REST filters are unreliable). Unassigned projects stay visible;
+ * otherwise the user must be assigned or already allocated.
+ */
+export async function findVisibleProjects(
+  strapi: Core.Strapi,
+  roleType: RoleType,
+  userId: number,
+): Promise<VisibleProjects | null> {
+  if (roleType === 'administrator' || roleType === 'executive') return null
+
+  const employeeIds = await findProjectScopeEmployeeIds(strapi, roleType, userId)
+
+  const projects = await strapi.db.query('api::project.project').findMany({
+    populate: ['assigned_employees'],
+  })
+
+  const allocatedIds = new Set<number>()
+  if (employeeIds.length) {
+    const allocations = await strapi.db.query('api::allocation.allocation').findMany({
+      where: { employee: { id: { $in: employeeIds } } },
+      populate: ['project'],
+    })
+    for (const row of allocations) {
+      const projectId = (row.project as { id?: number } | undefined)?.id
+      if (typeof projectId === 'number') allocatedIds.add(projectId)
+    }
+  }
+
+  const ids: number[] = []
+  const documentIds: string[] = []
+  for (const project of projects) {
+    const projectId = project.id as number
+    const documentId = project.documentId as string | undefined
+    const assigned = (project.assigned_employees as { id: number }[] | undefined) ?? []
+    const visible =
+      !assigned.length ||
+      employeeIds.some((id) => assigned.some((employee) => employee.id === id)) ||
+      allocatedIds.has(projectId)
+    if (!visible) continue
+    ids.push(projectId)
+    if (documentId) documentIds.push(documentId)
+  }
+  return { ids, documentIds }
+}
+
+/** Scope project lists to assigned, allocated, or still-unassigned projects. */
 export async function scopeProjectFilters(
   strapi: Core.Strapi,
   roleType: RoleType,
@@ -377,15 +422,15 @@ export async function scopeProjectFilters(
   const base = filters ?? {}
 
   if (roleType === 'employee' || roleType === 'team_leader' || roleType === 'department_manager') {
-    const employeeIds = await findProjectScopeEmployeeIds(strapi, roleType, userId)
-    if (!employeeIds.length) return emptyResultFilters(base)
-    return { $and: [base, { assigned_employees: { id: { $in: employeeIds } } }] }
+    const visible = await findVisibleProjects(strapi, roleType, userId)
+    if (!visible) return base
+    return documentIdsFilter(base, visible.documentIds)
   }
 
   return base
 }
 
-/** Whether a user may access a project based on assigned team members. */
+/** Whether a user may access a project based on assignment or existing allocations. */
 export async function canAccessProject(
   strapi: Core.Strapi,
   roleType: RoleType,
@@ -394,21 +439,9 @@ export async function canAccessProject(
 ): Promise<boolean> {
   if (roleType === 'administrator' || roleType === 'executive') return true
 
-  const project = await strapi.db.query('api::project.project').findOne({
-    where: { id: projectId },
-    populate: ['assigned_employees'],
-  })
-  if (!project) return false
-
-  const assignedIds = ((project.assigned_employees as { id: number }[] | undefined) ?? []).map(
-    (employee) => employee.id,
-  )
-  if (!assignedIds.length) return false
-
-  const scopeIds = await findProjectScopeEmployeeIds(strapi, roleType, userId)
-  if (!scopeIds.length) return false
-
-  return assignedIds.some((id) => scopeIds.includes(id))
+  const visible = await findVisibleProjects(strapi, roleType, userId)
+  if (!visible) return true
+  return visible.ids.includes(projectId)
 }
 
 export async function requireOwnEmployeeId(
@@ -426,10 +459,79 @@ export async function isEmployeeAssignedToProject(
   projectId: number,
 ): Promise<boolean> {
   const project = await strapi.db.query('api::project.project').findOne({
-    where: { id: projectId, assigned_employees: { id: employeeId } },
+    where: { id: projectId },
+    populate: ['assigned_employees'],
     select: ['id'],
   })
-  return Boolean(project)
+  if (!project) return false
+
+  const assigned = (project.assigned_employees as { id: number }[] | undefined) ?? []
+  if (!assigned.length) return true
+  return assigned.some((employee) => employee.id === employeeId)
+}
+
+/** Whether a user may access an employee record. */
+export async function canAccessEmployee(
+  strapi: Core.Strapi,
+  roleType: RoleType,
+  userId: number,
+  employeeId: number,
+): Promise<boolean> {
+  return canAccessLeaveEmployee(strapi, roleType, userId, employeeId)
+}
+
+/** Extract a numeric relation id from Strapi REST body shapes. */
+export function extractRelationId(data: Record<string, unknown>, key: string): number | null {
+  const value = data[key]
+  if (value == null) return null
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  if (typeof value === 'object') {
+    const obj = value as { id?: number; connect?: unknown; set?: unknown }
+    if (typeof obj.id === 'number') return obj.id
+    const connect = obj.connect ?? obj.set
+    if (Array.isArray(connect)) {
+      const first = connect[0]
+      if (typeof first === 'number') return first
+      if (typeof first === 'object' && first && 'id' in first) {
+        return (first as { id: number }).id
+      }
+    }
+    if (typeof connect === 'number') return connect
+    if (typeof connect === 'object' && connect && 'id' in connect) {
+      return (connect as { id: number }).id
+    }
+  }
+  return null
+}
+
+/** Whether a user may assign an employee to the given team. */
+export async function canAssignEmployeeToTeam(
+  strapi: Core.Strapi,
+  roleType: RoleType,
+  userId: number,
+  teamId: number | null | undefined,
+): Promise<boolean> {
+  if (teamId == null) {
+    return roleType === 'administrator' || roleType === 'department_manager'
+  }
+  if (roleType === 'administrator' || roleType === 'executive') return true
+
+  if (roleType === 'department_manager') {
+    const departmentIds = await findDepartmentIdsForManager(strapi, userId)
+    const teamIds = await findTeamIdsInDepartments(strapi, departmentIds)
+    return teamIds.includes(teamId)
+  }
+
+  if (roleType === 'team_leader') {
+    const teamIds = await findTeamIdsForLeader(strapi, userId)
+    return teamIds.includes(teamId)
+  }
+
+  return false
 }
 
 /** Whether a user may access a leave record for the given employee id. */

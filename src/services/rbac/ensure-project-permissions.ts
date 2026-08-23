@@ -2,6 +2,7 @@
  * Grant Users & Permissions actions for project domain content-types.
  */
 import type { Core } from '@strapi/strapi'
+import { syncContentTypePermissions } from './sync-content-type-permissions'
 
 const PROJECT_UIDS = [
   'api::client.client',
@@ -11,6 +12,7 @@ const PROJECT_UIDS = [
 
 const ACTIONS = ['find', 'findOne', 'create', 'update', 'delete'] as const
 const READ = ['find', 'findOne'] as const
+const PROJECT_WRITE = ['find', 'findOne', 'create', 'update', 'delete'] as const
 
 const ROLE_MATRIX: Record<
   string,
@@ -29,12 +31,12 @@ const ROLE_MATRIX: Record<
   department_manager: {
     'api::client.client': READ,
     'api::skill.skill': READ,
-    'api::project.project': ['find', 'findOne', 'create', 'update', 'delete'],
+    'api::project.project': PROJECT_WRITE,
   },
   team_leader: {
     'api::client.client': READ,
     'api::skill.skill': READ,
-    'api::project.project': ['find', 'findOne', 'update'],
+    'api::project.project': PROJECT_WRITE,
   },
   employee: {
     'api::client.client': READ,
@@ -50,36 +52,9 @@ const ROLE_MATRIX: Record<
 
 export async function ensureProjectPermissions(strapi: Core.Strapi): Promise<void> {
   for (const [roleType, matrix] of Object.entries(ROLE_MATRIX)) {
-    const role = await strapi.db.query('plugin::users-permissions.role').findOne({
-      where: { type: roleType },
-    })
-    if (!role) {
-      continue
+    for (const uid of PROJECT_UIDS) {
+      await syncContentTypePermissions(strapi, roleType, uid, matrix[uid] || [])
     }
-
-    for (const [uid, actions] of Object.entries(matrix)) {
-      for (const action of actions || []) {
-        const actionId = `${uid}.${action}`
-        const existing = await strapi.db.query('plugin::users-permissions.permission').findOne({
-          where: {
-            action: actionId,
-            role: role.id,
-          },
-        })
-
-        if (existing) {
-          continue
-        }
-
-        await strapi.db.query('plugin::users-permissions.permission').create({
-          data: {
-            action: actionId,
-            role: role.id,
-          },
-        })
-      }
-    }
-
     strapi.log.info(`Ensured project permissions for role: ${roleType}`)
   }
 }

@@ -3,6 +3,7 @@
  */
 import { factories } from '@strapi/strapi'
 import {
+  canAccessEmployee,
   findEmployeeIdForUser,
   isEmployeeAssignedToProject,
   scopeEmployeeRelationFilters,
@@ -85,6 +86,9 @@ export default factories.createCoreController('api::allocation.allocation', ({ s
       if (fields.employeeId !== ownId) return ctx.forbidden()
       const assigned = await isEmployeeAssignedToProject(strapi, ownId, fields.projectId)
       if (!assigned) return ctx.forbidden('Project not assigned to this employee')
+    } else if (roleType === 'team_leader' || roleType === 'department_manager') {
+      const allowed = await canAccessEmployee(strapi, roleType, user.id, fields.employeeId)
+      if (!allowed) return ctx.forbidden()
     }
 
     try {
@@ -142,6 +146,14 @@ export default factories.createCoreController('api::allocation.allocation', ({ s
         delete body.data.employee
         delete body.data.status
       }
+    } else if (roleType === 'team_leader' || roleType === 'department_manager') {
+      const allowed = await canAccessEmployee(
+        strapi,
+        roleType,
+        user.id,
+        existing.employee?.id as number,
+      )
+      if (!allowed) return ctx.forbidden()
     }
 
     const incoming = extractAllocationFields({ ...existing, ...body?.data })
@@ -204,6 +216,14 @@ export default factories.createCoreController('api::allocation.allocation', ({ s
       if (existing.status !== 'draft') {
         return ctx.badRequest('Only draft allocations can be deleted')
       }
+    } else if (roleType === 'team_leader' || roleType === 'department_manager') {
+      const allowed = await canAccessEmployee(
+        strapi,
+        roleType,
+        user.id,
+        existing.employee?.id as number,
+      )
+      if (!allowed) return ctx.forbidden()
     }
 
     try {

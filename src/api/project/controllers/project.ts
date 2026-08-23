@@ -71,6 +71,27 @@ export default factories.createCoreController('api::project.project', ({ strapi 
   },
 
   async update(ctx) {
+    const user = ctx.state.user as { id: number } | undefined
+    if (!user) {
+      return ctx.unauthorized()
+    }
+
+    const documentId = ctx.params.id as string
+    const existing = await strapi.db.query('api::project.project').findOne({
+      where: { documentId },
+      select: ['id'],
+    })
+    if (!existing) return ctx.notFound()
+
+    const roleType = await resolveRoleType(strapi, user)
+    const allowed = await canAccessProject(
+      strapi,
+      roleType,
+      user.id,
+      existing.id as number,
+    )
+    if (!allowed) return ctx.forbidden()
+
     const body = ctx.request.body as { data?: Record<string, unknown> }
     const error = validateDates(body)
     if (error) {
@@ -83,5 +104,30 @@ export default factories.createCoreController('api::project.project', ({ strapi 
     }
 
     return await super.update(ctx)
+  },
+
+  async delete(ctx) {
+    const user = ctx.state.user as { id: number } | undefined
+    if (!user) {
+      return ctx.unauthorized()
+    }
+
+    const documentId = ctx.params.id as string
+    const existing = await strapi.db.query('api::project.project').findOne({
+      where: { documentId },
+      select: ['id'],
+    })
+    if (!existing) return ctx.notFound()
+
+    const roleType = await resolveRoleType(strapi, user)
+    const allowed = await canAccessProject(
+      strapi,
+      roleType,
+      user.id,
+      existing.id as number,
+    )
+    if (!allowed) return ctx.forbidden()
+
+    return await super.delete(ctx)
   },
 }))
