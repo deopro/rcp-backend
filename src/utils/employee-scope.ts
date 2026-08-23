@@ -333,6 +333,40 @@ export async function scopeEmployeeRelationFilters(
   return base
 }
 
+/** Employee ids whose project assignments are visible for the given role. */
+export async function findProjectScopeEmployeeIds(
+  strapi: Core.Strapi,
+  roleType: RoleType,
+  userId: number,
+): Promise<number[]> {
+  if (roleType === 'employee') {
+    const employeeId = await findEmployeeIdForUser(strapi, userId)
+    if (!employeeId) return []
+
+    const employee = await strapi.db.query('api::employee.employee').findOne({
+      where: { id: employeeId },
+      populate: ['team'],
+    })
+    const teamId = employee?.team?.id as number | undefined
+    if (!teamId) return [employeeId]
+
+    return findEmployeeIdsInTeams(strapi, [teamId])
+  }
+
+  if (roleType === 'team_leader') {
+    const teamIds = await findTeamIdsForLeader(strapi, userId)
+    return findEmployeeIdsInTeams(strapi, teamIds)
+  }
+
+  if (roleType === 'department_manager') {
+    const departmentIds = await findDepartmentIdsForManager(strapi, userId)
+    const teamIds = await findTeamIdsInDepartments(strapi, departmentIds)
+    return findEmployeeIdsInTeams(strapi, teamIds)
+  }
+
+  return []
+}
+
 /** Scope project lists via assigned employee ids. */
 export async function scopeProjectFilters(
   strapi: Core.Strapi,
@@ -342,28 +376,39 @@ export async function scopeProjectFilters(
 ): Promise<object> {
   const base = filters ?? {}
 
-  if (roleType === 'employee') {
-    const employeeId = await findEmployeeIdForUser(strapi, userId)
-    if (!employeeId) return emptyResultFilters(base)
-    return { $and: [base, { assigned_employees: { id: { $eq: employeeId } } }] }
-  }
-
-  if (roleType === 'team_leader') {
-    const teamIds = await findTeamIdsForLeader(strapi, userId)
-    const employeeIds = await findEmployeeIdsInTeams(strapi, teamIds)
-    if (!employeeIds.length) return emptyResultFilters(base)
-    return { $and: [base, { assigned_employees: { id: { $in: employeeIds } } }] }
-  }
-
-  if (roleType === 'department_manager') {
-    const departmentIds = await findDepartmentIdsForManager(strapi, userId)
-    const teamIds = await findTeamIdsInDepartments(strapi, departmentIds)
-    const employeeIds = await findEmployeeIdsInTeams(strapi, teamIds)
+  if (roleType === 'employee' || roleType === 'team_leader' || roleType === 'department_manager') {
+    const employeeIds = await findProjectScopeEmployeeIds(strapi, roleType, userId)
     if (!employeeIds.length) return emptyResultFilters(base)
     return { $and: [base, { assigned_employees: { id: { $in: employeeIds } } }] }
   }
 
   return base
+}
+
+/** Whether a user may access a project based on assigned team members. */
+export async function canAccessProject(
+  strapi: Core.Strapi,
+  roleType: RoleType,
+  userId: number,
+  projectId: number,
+): Promise<boolean> {
+  if (roleType === 'administrator' || roleType === 'executive') return true
+
+  const project = await strapi.db.query('api::project.project').findOne({
+    where: { id: projectId },
+    populate: ['assigned_employees'],
+  })
+  if (!project) return false
+
+  const assignedIds = ((project.assigned_employees as { id: number }[] | undefined) ?? []).map(
+    (employee) => employee.id,
+  )
+  if (!assignedIds.length) return false
+
+  const scopeIds = await findProjectScopeEmployeeIds(strapi, roleType, userId)
+  if (!scopeIds.length) return false
+
+  return assignedIds.some((id) => scopeIds.includes(id))
 }
 
 export async function requireOwnEmployeeId(

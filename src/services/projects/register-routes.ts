@@ -3,6 +3,8 @@
  */
 import type { Core } from '@strapi/strapi'
 import { computeProjectSummary } from './summary'
+import { canAccessProject } from '../../utils/employee-scope'
+import { resolveRoleType } from '../../utils/resolve-role-type'
 
 export function registerProjectRoutes(strapi: Core.Strapi) {
   strapi.server.routes({
@@ -19,6 +21,25 @@ export function registerProjectRoutes(strapi: Core.Strapi) {
         }
 
         const { documentId } = ctx.params as { documentId: string }
+        const project = await strapi.db.query('api::project.project').findOne({
+          where: { documentId },
+          select: ['id'],
+        })
+        if (!project) {
+          return ctx.notFound('Project not found')
+        }
+
+        const roleType = await resolveRoleType(strapi, authUser)
+        const allowed = await canAccessProject(
+          strapi,
+          roleType,
+          authUser.id,
+          project.id as number,
+        )
+        if (!allowed) {
+          return ctx.forbidden()
+        }
+
         const summary = await computeProjectSummary(strapi, documentId)
 
         if (!summary) {

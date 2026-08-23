@@ -4,7 +4,7 @@
  */
 import { factories } from '@strapi/strapi'
 import { allocateNextProjectCode } from '../../../services/projects/project-code'
-import { scopeProjectFilters } from '../../../utils/employee-scope'
+import { canAccessProject, scopeProjectFilters } from '../../../utils/employee-scope'
 import { resolveRoleType } from '../../../utils/resolve-role-type'
 
 function validateDates(body: { data?: Record<string, unknown> }) {
@@ -29,6 +29,31 @@ export default factories.createCoreController('api::project.project', ({ strapi 
     ctx.query.filters = await scopeProjectFilters(strapi, roleType, user.id, filters)
 
     return await super.find(ctx)
+  },
+
+  async findOne(ctx) {
+    const user = ctx.state.user as { id: number } | undefined
+    if (!user) {
+      return ctx.unauthorized()
+    }
+
+    const documentId = ctx.params.id as string
+    const existing = await strapi.db.query('api::project.project').findOne({
+      where: { documentId },
+      select: ['id'],
+    })
+    if (!existing) return ctx.notFound()
+
+    const roleType = await resolveRoleType(strapi, user)
+    const allowed = await canAccessProject(
+      strapi,
+      roleType,
+      user.id,
+      existing.id as number,
+    )
+    if (!allowed) return ctx.forbidden()
+
+    return await super.findOne(ctx)
   },
 
   async create(ctx) {
