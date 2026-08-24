@@ -16,5 +16,13 @@
     "rootDir": "."
   },
   "include": ["./", "./**/*.ts", "./**/*.js", "src/**/*.json"],
-  "exclude": ["node_modules/", "build/", "dist/", ".cache/", ".tmp/"]
+  "exclude": [
+    "node_modules/",
+    "build/",
+    "dist/",
+    ".cache/",
+    ".tmp/",
+    "tests/",
+    "**/*.test.ts"
+  ]
 }

@@ -19,6 +19,7 @@ import { ensureUserRelationPermissions } from './services/rbac/ensure-user-relat
 import { ensureRcpRoles } from './services/rbac/ensure-roles'
 import { syncEmployeeRoleUsers } from './utils/employee-scope'
 import { getAuthMode } from './utils/auth-mode'
+import { exchangeIdToken, OidcError } from './services/auth/oidc'
 
 function sanitizeUser(user: Record<string, unknown>) {
   const { password: _p, resetPasswordToken: _r, confirmationToken: _c, ...safe } = user
@@ -169,21 +170,26 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
       },
     },
     {
-      method: 'GET',
-      path: '/auth/oidc',
+      method: 'POST',
+      path: '/auth/oidc/exchange',
       info: {},
       handler: async (ctx) => {
-        const mode = getAuthMode()
-        ctx.status = mode === 'oidc' ? 501 : 400
-        ctx.body = {
-          error: {
-            status: ctx.status,
-            name: 'OidcNotConfigured',
-            message:
-              mode === 'oidc'
-                ? 'OIDC/Entra ID mode is enabled but the provider is not configured yet. See ARCHITECTURE.md.'
-                : 'AUTH_MODE is local. Set AUTH_MODE=oidc and configure OIDC_* env vars to use Entra ID.',
-          },
+        const body = ctx.request.body as { id_token?: string }
+        try {
+          ctx.body = await exchangeIdToken(strapi, body?.id_token)
+        } catch (error) {
+          if (error instanceof OidcError) {
+            ctx.status = error.status
+            ctx.body = {
+              error: {
+                status: error.status,
+                name: error.name,
+                message: error.message,
+              },
+            }
+            return
+          }
+          throw error
         }
       },
       config: {

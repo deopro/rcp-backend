@@ -8,7 +8,7 @@ import {
   isWorkingDay,
   parseIsoDate,
   toIsoDate,
-} from '../src/services/capacity/working-days'
+} from '../src/services/capacity/working-days.ts'
 
 describe('working-days', () => {
   it('parses and formats ISO dates without timezone shift', () => {
