@@ -661,7 +661,9 @@ export interface ApiEmployeeEmployee extends Struct.CollectionTypeSchema {
         number
       > &
       Schema.Attribute.DefaultTo<8>;
-    email: Schema.Attribute.Email & Schema.Attribute.Required;
+    email: Schema.Attribute.Email &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
     employee_number: Schema.Attribute.String &
       Schema.Attribute.Required &
       Schema.Attribute.Unique;

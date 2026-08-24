@@ -21,6 +21,9 @@ export type OidcClaims = {
   exp?: number
   email?: unknown
   preferred_username?: unknown
+  given_name?: unknown
+  family_name?: unknown
+  name?: unknown
 }
 
 export function emailFromClaims(payload: OidcClaims): string | null {
@@ -33,6 +36,32 @@ export function emailFromClaims(payload: OidcClaims): string | null {
     return preferred.trim().toLowerCase()
   }
   return null
+}
+
+function asTrimmedName(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+/** given_name / family_name, else split the `name` claim. */
+export function namesFromClaims(payload: OidcClaims): {
+  first_name: string | null
+  last_name: string | null
+} {
+  const given = asTrimmedName(payload.given_name)
+  const family = asTrimmedName(payload.family_name)
+  if (given || family) {
+    return { first_name: given || null, last_name: family || null }
+  }
+
+  const display = asTrimmedName(payload.name)
+  if (!display) return { first_name: null, last_name: null }
+
+  const space = display.indexOf(' ')
+  if (space === -1) return { first_name: display, last_name: null }
+  return {
+    first_name: display.slice(0, space).trim() || null,
+    last_name: display.slice(space + 1).trim() || null,
+  }
 }
 
 export function assertOidcClaims(payload: OidcClaims, env: OidcEnv): void {

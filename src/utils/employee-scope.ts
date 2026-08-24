@@ -14,7 +14,7 @@ export async function findEmployeeIdForUser(
 
   const user = await strapi.db.query('plugin::users-permissions.user').findOne({
     where: { id: userId },
-    select: ['email', 'username'],
+    select: ['email', 'username', 'first_name', 'last_name'],
   })
   if (!user) return null
 
@@ -87,6 +87,7 @@ export async function ensureEmployeeForUser(
       employee_number: employeeNumber,
       full_name: fullNameFromUser(user, userId),
       email,
+      position: null,
       daily_capacity: 8,
       status: 'active',
       user: userId,
@@ -95,6 +96,65 @@ export async function ensureEmployeeForUser(
   })
 
   return (created?.id as number | undefined) ?? null
+}
+
+/** Copy User email and display name onto an employee payload. Never overwrites number or position. */
+export async function overlayEmployeeIdentityFromUser(
+  strapi: Core.Strapi,
+  data: Record<string, unknown>,
+): Promise<void> {
+  const userId = extractRelationId(data, 'user')
+  if (!userId) return
+
+  const user = await strapi.db.query('plugin::users-permissions.user').findOne({
+    where: { id: userId },
+    select: ['email', 'username', 'first_name', 'last_name'],
+  })
+  if (!user) return
+
+  data.full_name = fullNameFromUser(user, userId)
+  if (typeof user.email === 'string' && user.email.trim()) {
+    data.email = user.email.trim().toLowerCase()
+  }
+}
+
+/** Refresh cached Employee email/full_name from the linked User (OIDC / profile updates). */
+export async function refreshLinkedEmployeeIdentity(
+  strapi: Core.Strapi,
+  userId: number,
+): Promise<void> {
+  const employee = await strapi.db.query('api::employee.employee').findOne({
+    where: { user: userId },
+    select: ['id'],
+  })
+  if (!employee?.id) return
+
+  const data: Record<string, unknown> = { user: userId }
+  await overlayEmployeeIdentityFromUser(strapi, data)
+  await strapi.db.query('api::employee.employee').update({
+    where: { id: employee.id },
+    data: {
+      ...(typeof data.email === 'string' ? { email: data.email } : {}),
+      ...(typeof data.full_name === 'string' ? { full_name: data.full_name } : {}),
+    },
+  })
+}
+
+/** Return an error message if another employee already uses this email. */
+export async function findDuplicateEmployeeEmail(
+  strapi: Core.Strapi,
+  email: unknown,
+  excludeId?: number,
+): Promise<string | null> {
+  if (typeof email !== 'string' || !email.trim()) return null
+  const normalized = email.trim().toLowerCase()
+  const existing = await strapi.db.query('api::employee.employee').findOne({
+    where: excludeId
+      ? { email: normalized, id: { $ne: excludeId } }
+      : { email: normalized },
+    select: ['id'],
+  })
+  return existing ? 'An employee with this email already exists' : null
 }
 
 export async function syncEmployeeRoleUsers(strapi: Core.Strapi): Promise<void> {

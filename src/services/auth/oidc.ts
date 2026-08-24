@@ -4,11 +4,14 @@ import { getAuthMode } from '../../utils/auth-mode'
 import {
   assertOidcClaims,
   emailFromClaims,
+  namesFromClaims,
   OidcError,
   type OidcEnv,
 } from './oidc-claims'
+import { isAccountBlocked } from '../../utils/account-status'
+import { refreshLinkedEmployeeIdentity } from '../../utils/employee-scope'
 
-export { assertOidcClaims, emailFromClaims, OidcError, type OidcEnv }
+export { assertOidcClaims, emailFromClaims, namesFromClaims, OidcError, type OidcEnv }
 
 export function getOidcEnv(): OidcEnv | null {
   if (getAuthMode() !== 'oidc') return null
@@ -69,10 +72,35 @@ export async function exchangeIdToken(
   if (!user) {
     throw new OidcError(403, 'OidcUserNotFound', 'No RCP user exists for this Microsoft account')
   }
-  if (user.blocked || user.status === 'inactive') {
-    throw new OidcError(403, 'OidcUserInactive', 'User is inactive')
+  if (isAccountBlocked(user)) {
+    throw new OidcError(403, 'OidcUserInactive', 'User is blocked')
   }
 
-  const jwt = await strapi.plugin('users-permissions').service('jwt').issue({ id: user.id })
-  return { jwt, user: sanitizeUser(user as Record<string, unknown>) }
+  const names = namesFromClaims(payload)
+  const updates: Record<string, unknown> = {}
+  if (names.first_name) updates.first_name = names.first_name
+  if (names.last_name) updates.last_name = names.last_name
+
+  const currentEmail = typeof user.email === 'string' ? user.email.trim().toLowerCase() : ''
+  if (email !== currentEmail) {
+    const taken = await strapi.db.query('plugin::users-permissions.user').findOne({
+      where: { email: { $eqi: email }, id: { $ne: user.id } },
+      select: ['id'],
+    })
+    if (!taken) updates.email = email
+  }
+
+  let current = user
+  if (Object.keys(updates).length) {
+    current = await strapi.db.query('plugin::users-permissions.user').update({
+      where: { id: user.id },
+      data: updates,
+      populate: ['role'],
+    })
+  }
+
+  await refreshLinkedEmployeeIdentity(strapi, current.id as number)
+
+  const jwt = await strapi.plugin('users-permissions').service('jwt').issue({ id: current.id })
+  return { jwt, user: sanitizeUser(current as Record<string, unknown>) }
 }

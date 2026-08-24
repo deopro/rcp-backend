@@ -3,7 +3,12 @@
  */
 import type { Core } from '@strapi/strapi'
 
-const USER_FIND_ROLES = ['administrator', 'department_manager'] as const
+const USER_FIND_ROLES = [
+  'administrator',
+  'executive',
+  'department_manager',
+  'team_leader',
+] as const
 
 export async function ensureUserRelationPermissions(strapi: Core.Strapi): Promise<void> {
   const action = 'plugin::users-permissions.user.find'

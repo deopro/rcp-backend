@@ -35,7 +35,7 @@ export function registerOrgRoutes(strapi: Core.Strapi) {
         }
 
         const users = await strapi.db.query('plugin::users-permissions.user').findMany({
-          where: { status: { $ne: 'inactive' } },
+          where: { blocked: { $ne: true } },
           select: ['id', 'username', 'email', 'first_name', 'last_name'],
           orderBy: [{ last_name: 'asc' }, { first_name: 'asc' }, { email: 'asc' }],
           limit: 500,

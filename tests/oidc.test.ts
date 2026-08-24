@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { assertOidcClaims, emailFromClaims, OidcError } from '../src/services/auth/oidc-claims.ts'
+import {
+  assertOidcClaims,
+  emailFromClaims,
+  namesFromClaims,
+  OidcError,
+} from '../src/services/auth/oidc-claims.ts'
 
 const env = {
   issuer: 'https://login.microsoftonline.com/tenant-id/v2.0',
@@ -97,6 +102,34 @@ describe('oidc claims', () => {
           env,
         ),
       (error: unknown) => error instanceof OidcError && error.name === 'OidcInvalidToken',
+    )
+  })
+
+  it('reads given_name and family_name', () => {
+    assert.deepEqual(namesFromClaims({ given_name: ' Ada ', family_name: 'Lovelace' }), {
+      first_name: 'Ada',
+      last_name: 'Lovelace',
+    })
+  })
+
+  it('splits the name claim when given/family are missing', () => {
+    assert.deepEqual(namesFromClaims({ name: 'Ada Lovelace' }), {
+      first_name: 'Ada',
+      last_name: 'Lovelace',
+    })
+  })
+
+  it('uses a single-token name claim as first_name', () => {
+    assert.deepEqual(namesFromClaims({ name: 'Ada' }), {
+      first_name: 'Ada',
+      last_name: null,
+    })
+  })
+
+  it('prefers given_name over the name claim', () => {
+    assert.deepEqual(
+      namesFromClaims({ given_name: 'Ada', family_name: 'Lovelace', name: 'A. Lovelace' }),
+      { first_name: 'Ada', last_name: 'Lovelace' },
     )
   })
 })

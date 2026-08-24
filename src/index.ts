@@ -18,6 +18,11 @@ import { ensureSkillsPermissions } from './services/rbac/ensure-skills-permissio
 import { ensureUserRelationPermissions } from './services/rbac/ensure-user-relation-permissions'
 import { ensureRcpRoles } from './services/rbac/ensure-roles'
 import { syncEmployeeRoleUsers } from './utils/employee-scope'
+import {
+  isAccountBlocked,
+  logDuplicateEmployeeEmails,
+  migrateInactiveUsersToBlocked,
+} from './utils/account-status'
 import { getAuthMode } from './utils/auth-mode'
 import { exchangeIdToken, OidcError } from './services/auth/oidc'
 
@@ -42,6 +47,7 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
       enum: ['pt-PT', 'en'],
       default: 'pt-PT',
     },
+    // Kept registered so schema sync does not drop the column before inactive→blocked copy.
     status: {
       type: 'enumeration',
       enum: ['active', 'inactive'],
@@ -119,8 +125,8 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
           populate: ['role'],
         })
 
-        if (!user || user.status === 'inactive') {
-          return ctx.unauthorized('User is inactive')
+        if (!user || isAccountBlocked(user)) {
+          return ctx.unauthorized('User is blocked')
         }
 
         ctx.body = sanitizeUser(user as Record<string, unknown>)
@@ -151,8 +157,8 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
           where: { id: authUser.id },
         })
 
-        if (!existing || existing.status === 'inactive') {
-          return ctx.unauthorized('User is inactive')
+        if (!existing || isAccountBlocked(existing)) {
+          return ctx.unauthorized('User is blocked')
         }
 
         const updated = await strapi.db.query('plugin::users-permissions.user').update({
@@ -212,6 +218,8 @@ const bootstrap = async ({ strapi }: { strapi: Core.Strapi }) => {
     await ensureLeavePermissions(strapi)
     await ensureApprovalPermissions(strapi)
     await ensureUserRelationPermissions(strapi)
+    await migrateInactiveUsersToBlocked(strapi)
+    await logDuplicateEmployeeEmails(strapi)
     await syncEmployeeRoleUsers(strapi)
   } catch (error) {
     strapi.log.error('Failed to ensure RCP roles / permissions')
