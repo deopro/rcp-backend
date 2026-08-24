@@ -6,17 +6,31 @@ export async function findEmployeeIdForUser(
   strapi: Core.Strapi,
   userId: number,
 ): Promise<number | null> {
+  type EmployeeCandidate = { id: number; team?: { id?: number } | null }
+  const found = new Map<number, EmployeeCandidate>()
+
   const byUser = await strapi.db.query('api::employee.employee').findOne({
     where: { user: userId },
-    select: ['id'],
+    populate: ['team'],
   })
-  if (byUser?.id) return byUser.id as number
+  if (byUser?.id) {
+    found.set(byUser.id as number, byUser as EmployeeCandidate)
+    // #region agent log
+    fetch('http://host.docker.internal:7550/ingest/00e40e9f-34c6-4349-ac97-bfda2cfa152b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'63ba08'},body:JSON.stringify({sessionId:'63ba08',hypothesisId:'A',location:'employee-scope.ts:findEmployeeIdForUser',message:'resolved employee by user relation',data:{userId,employeeId:byUser.id,path:'byUser'},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }
 
   const user = await strapi.db.query('plugin::users-permissions.user').findOne({
     where: { id: userId },
     select: ['email', 'username', 'first_name', 'last_name'],
   })
-  if (!user) return null
+  if (!user) {
+    if (byUser?.id) return byUser.id as number
+    // #region agent log
+    fetch('http://host.docker.internal:7550/ingest/00e40e9f-34c6-4349-ac97-bfda2cfa152b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'63ba08'},body:JSON.stringify({sessionId:'63ba08',hypothesisId:'A',location:'employee-scope.ts:findEmployeeIdForUser',message:'user row missing',data:{userId,path:'noUser'},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return null
+  }
 
   const candidates = [user.email, user.username]
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
@@ -24,20 +38,57 @@ export async function findEmployeeIdForUser(
 
   for (const candidate of [...new Set(candidates)]) {
     const byEmail = await strapi.db.query('api::employee.employee').findOne({
-      where: { email: candidate },
-      select: ['id'],
+      where: { email: { $eqi: candidate } },
+      populate: ['team'],
     })
     if (!byEmail?.id) continue
-
-    await strapi.db.query('api::employee.employee').update({
-      where: { id: byEmail.id },
-      data: { user: userId },
-    })
-
-    return byEmail.id as number
+    found.set(byEmail.id as number, byEmail as EmployeeCandidate)
+    // #region agent log
+    fetch('http://host.docker.internal:7550/ingest/00e40e9f-34c6-4349-ac97-bfda2cfa152b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'63ba08'},body:JSON.stringify({sessionId:'63ba08',hypothesisId:'A',location:'employee-scope.ts:findEmployeeIdForUser',message:'resolved employee by email',data:{userId,employeeId:byEmail.id,path:'byEmail'},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
   }
 
-  return null
+  const displayName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim()
+  if (displayName) {
+    const byName = await strapi.db.query('api::employee.employee').findMany({
+      where: { full_name: { $eqi: displayName } },
+      populate: ['team'],
+    })
+    for (const row of byName) {
+      if (!row?.id) continue
+      found.set(row.id as number, row as EmployeeCandidate)
+    }
+  }
+
+  if (!found.size) {
+    // #region agent log
+    fetch('http://host.docker.internal:7550/ingest/00e40e9f-34c6-4349-ac97-bfda2cfa152b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'63ba08'},body:JSON.stringify({sessionId:'63ba08',hypothesisId:'A',location:'employee-scope.ts:findEmployeeIdForUser',message:'no employee for user',data:{userId,path:'miss',candidateCount:candidates.length},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return null
+  }
+
+  const all = [...found.values()]
+  const withTeam = all.filter((row) => row.team?.id != null)
+  const preferred = withTeam[0] || (byUser as EmployeeCandidate | undefined) || all[0]
+  const linkedId = byUser?.id as number | undefined
+
+  if (preferred.id !== linkedId) {
+    if (linkedId) {
+      await strapi.db.query('api::employee.employee').update({
+        where: { id: linkedId },
+        data: { user: null },
+      })
+    }
+    await strapi.db.query('api::employee.employee').update({
+      where: { id: preferred.id },
+      data: { user: userId },
+    })
+  }
+
+  // #region agent log
+  fetch('http://host.docker.internal:7550/ingest/00e40e9f-34c6-4349-ac97-bfda2cfa152b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'63ba08'},body:JSON.stringify({sessionId:'63ba08',hypothesisId:'B',location:'employee-scope.ts:findEmployeeIdForUser',message:'preferred employee after duplicate check',data:{userId,linkedId:linkedId??null,preferredId:preferred.id,candidateCount:all.length,withTeamCount:withTeam.length,runId:'post-fix'},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  return preferred.id
 }
 
 function fullNameFromUser(

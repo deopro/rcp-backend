@@ -3,6 +3,7 @@
  */
 import type { Core } from '@strapi/strapi'
 import { computeCapacity, type CapacityResult } from '../capacity/calculate'
+import { findEmployeeIdForUser } from '../../utils/employee-scope'
 
 export type DashboardKpis = {
   employees: number
@@ -92,6 +93,11 @@ async function resolveScopedEmployeeIds(
     employeeId?: number
   },
 ): Promise<number[] | undefined> {
+  if (opts.roleType === 'employee') {
+    const ownId = await findEmployeeIdForUser(strapi, opts.userId)
+    return ownId ? [ownId] : []
+  }
+
   const where: Record<string, unknown> = { status: 'active' }
 
   if (opts.employeeId) {
@@ -120,9 +126,7 @@ async function resolveScopedEmployeeIds(
     where.team = { department: opts.departmentId }
   }
 
-  if (opts.roleType === 'employee') {
-    where.user = opts.userId
-  } else if (opts.roleType === 'team_leader') {
+  if (opts.roleType === 'team_leader') {
     where.team = opts.teamId
       ? { id: opts.teamId, team_leader: opts.userId }
       : { team_leader: opts.userId }
@@ -274,6 +278,11 @@ async function loadAllocationByProject(
     populate: ['project'],
   })
 
+  const missingProject = rows.filter((row: { project?: { id?: number } }) => !row.project?.id).length
+  // #region agent log
+  fetch('http://host.docker.internal:7550/ingest/00e40e9f-34c6-4349-ac97-bfda2cfa152b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'63ba08'},body:JSON.stringify({sessionId:'63ba08',hypothesisId:'D',location:'dashboard/calculate.ts:loadAllocationByProject',message:'allocation rows for dashboard projects',data:{employeeIds,from,to,rowCount:rows.length,missingProject},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+
   const map = new Map<number, { name: string; hours: number }>()
   for (const row of rows) {
     const project = row.project as { id?: number; name?: string } | undefined
@@ -303,11 +312,31 @@ async function countActiveProjects(
     status: { $in: ['planned', 'active'] },
   }
 
-  if (employeeIds?.length) {
-    where.assigned_employees = { id: { $in: employeeIds } }
+  if (!employeeIds?.length) {
+    return strapi.db.query('api::project.project').count({ where })
   }
 
-  return strapi.db.query('api::project.project').count({ where })
+  const [assigned, allocRows] = await Promise.all([
+    strapi.db.query('api::project.project').findMany({
+      where: {
+        ...where,
+        assigned_employees: { id: { $in: employeeIds } },
+      },
+      select: ['id'],
+    }),
+    strapi.db.query('api::allocation.allocation').findMany({
+      where: { employee: { id: { $in: employeeIds } } },
+      populate: ['project'],
+    }),
+  ])
+
+  const ids = new Set<number>(assigned.map((p: { id: number }) => p.id))
+  for (const row of allocRows) {
+    const project = row.project as { id?: number; status?: string } | undefined
+    if (!project?.id) continue
+    if (project.status === 'planned' || project.status === 'active') ids.add(project.id)
+  }
+  return ids.size
 }
 
 async function loadPendingApprovals(
@@ -426,6 +455,10 @@ export async function computeDashboard(
 ): Promise<DashboardResult> {
   const employeeIds = await resolveScopedEmployeeIds(strapi, opts)
 
+  // #region agent log
+  fetch('http://host.docker.internal:7550/ingest/00e40e9f-34c6-4349-ac97-bfda2cfa152b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'63ba08'},body:JSON.stringify({sessionId:'63ba08',hypothesisId:'A',location:'dashboard/calculate.ts:computeDashboard',message:'scoped employee ids',data:{roleType:opts.roleType,userId:opts.userId,from:opts.from,to:opts.to,employeeIds:employeeIds??null,employeeCount:employeeIds?.length??null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+
   if (employeeIds && employeeIds.length === 0) {
     return {
       role: opts.roleType || 'authenticated',
@@ -480,6 +513,21 @@ export async function computeDashboard(
 
   const aggregated = aggregateCapacity(capacity, projectAllocMap)
   const scopedIds = capacity.employees.map((e) => e.employee_id)
+
+  const weekAllocCount = await strapi.db.query('api::allocation.allocation').count({
+    where: { allocation_date: { $gte: capacity.from, $lte: capacity.to } },
+  })
+  const scopedAllocCount = scopedIds.length
+    ? await strapi.db.query('api::allocation.allocation').count({
+        where: {
+          employee: { id: { $in: scopedIds } },
+          allocation_date: { $gte: capacity.from, $lte: capacity.to },
+        },
+      })
+    : 0
+  // #region agent log
+  fetch('http://host.docker.internal:7550/ingest/00e40e9f-34c6-4349-ac97-bfda2cfa152b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'63ba08'},body:JSON.stringify({sessionId:'63ba08',hypothesisId:'B',location:'dashboard/calculate.ts:computeDashboard',message:'week allocation counts',data:{roleType:opts.roleType,from:capacity.from,to:capacity.to,scopedIds,capacityEmployees:scopedIds.length,weekAllocCount,scopedAllocCount,allocatedHours:aggregated.kpis.allocated_hours},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   const [allocation_by_project, active_projects, pendingApprovals, pendingLeave] =
     await Promise.all([
