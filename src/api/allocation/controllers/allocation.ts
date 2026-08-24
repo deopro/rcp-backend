@@ -116,13 +116,21 @@ export default factories.createCoreController('api::allocation.allocation', ({ s
       throw e
     }
 
-    if (body?.data && user) {
-      body.data.created_by = user.id
-      body.data.updated_by = user.id
-      if (!body.data.status) body.data.status = 'draft'
-    }
-
-    return await super.create(ctx)
+    const created = await strapi.db.query('api::allocation.allocation').create({
+      data: {
+        employee: fields.employeeId,
+        project: fields.projectId,
+        allocation_date: fields.date,
+        hours: fields.hours,
+        notes: fields.notes ?? null,
+        status: fields.status || 'draft',
+        created_by: user.id,
+        updated_by: user.id,
+      },
+      populate: ['employee', 'project'],
+    })
+    ctx.body = { data: created }
+    return ctx.body
   },
 
   async update(ctx) {
@@ -194,11 +202,27 @@ export default factories.createCoreController('api::allocation.allocation', ({ s
       throw e
     }
 
-    if (body?.data && user) {
-      body.data.updated_by = user.id
+    const updateData: Record<string, unknown> = {
+      allocation_date: date,
+      hours,
+      notes: incoming.notes !== undefined ? incoming.notes : existing.notes,
+      updated_by: user.id,
+    }
+    if (roleType !== 'employee') {
+      updateData.employee = employeeId
+      updateData.project = projectId
+      if (incoming.status) updateData.status = incoming.status
+    } else if (projectId) {
+      updateData.project = projectId
     }
 
-    return await super.update(ctx)
+    const updated = await strapi.db.query('api::allocation.allocation').update({
+      where: { documentId },
+      data: updateData,
+      populate: ['employee', 'project'],
+    })
+    ctx.body = { data: updated }
+    return ctx.body
   },
 
   async delete(ctx) {

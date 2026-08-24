@@ -34,8 +34,28 @@ export function registerOrgRoutes(strapi: Core.Strapi) {
           return ctx.forbidden()
         }
 
+        const roleFilter =
+          typeof ctx.query.role === 'string'
+            ? ctx.query.role
+            : Array.isArray(ctx.query.role)
+              ? ctx.query.role[0]
+              : undefined
+
+        const where: Record<string, unknown> = { blocked: { $ne: true } }
+        if (typeof roleFilter === 'string' && roleFilter.trim()) {
+          const role = await strapi.db.query('plugin::users-permissions.role').findOne({
+            where: { type: roleFilter.trim() },
+            select: ['id'],
+          })
+          if (!role) {
+            ctx.body = { data: [] }
+            return
+          }
+          where.role = role.id
+        }
+
         const users = await strapi.db.query('plugin::users-permissions.user').findMany({
-          where: { blocked: { $ne: true } },
+          where,
           select: ['id', 'username', 'email', 'first_name', 'last_name'],
           orderBy: [{ last_name: 'asc' }, { first_name: 'asc' }, { email: 'asc' }],
           limit: 500,

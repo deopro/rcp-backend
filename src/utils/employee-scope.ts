@@ -184,6 +184,22 @@ export async function findDuplicateEmployeeUser(
   return existing ? 'This user is already linked to another employee' : null
 }
 
+/** Return an error message if the linked user does not have the employee role. */
+export async function linkedUserMustBeEmployeeRole(
+  strapi: Core.Strapi,
+  userId: number | null | undefined,
+): Promise<string | null> {
+  if (userId == null) return null
+  const user = await strapi.db.query('plugin::users-permissions.user').findOne({
+    where: { id: userId },
+    populate: ['role'],
+    select: ['id'],
+  })
+  const type = (user?.role as { type?: string } | undefined)?.type
+  if (type !== 'employee') return 'Only users with the employee role can be linked'
+  return null
+}
+
 export async function syncEmployeeRoleUsers(strapi: Core.Strapi): Promise<void> {
   const employeeRole = await strapi.db.query('plugin::users-permissions.role').findOne({
     where: { type: 'employee' },
@@ -571,30 +587,38 @@ export async function canAccessEmployee(
   return canAccessLeaveEmployee(strapi, roleType, userId, employeeId)
 }
 
-/** Extract a numeric relation id from Strapi REST body shapes. */
-export function extractRelationId(data: Record<string, unknown>, key: string): number | null {
-  const value = data[key]
-  if (value == null) return null
+function asNumericId(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.trim()) {
     const parsed = Number(value)
     return Number.isFinite(parsed) ? parsed : null
   }
+  return null
+}
+
+/** Extract a numeric relation id from Strapi REST body shapes. */
+export function extractRelationId(data: Record<string, unknown>, key: string): number | null {
+  const value = data[key]
+  if (value == null) return null
+  const direct = asNumericId(value)
+  if (direct != null) return direct
   if (typeof value === 'object') {
-    const obj = value as { id?: number; connect?: unknown; set?: unknown }
-    if (typeof obj.id === 'number') return obj.id
+    const obj = value as { id?: unknown; connect?: unknown; set?: unknown }
+    const fromId = asNumericId(obj.id)
+    if (fromId != null) return fromId
     const connect = obj.connect ?? obj.set
     if (Array.isArray(connect)) {
       const first = connect[0]
-      if (typeof first === 'number') return first
+      const fromFirst = asNumericId(first)
+      if (fromFirst != null) return fromFirst
       if (typeof first === 'object' && first && 'id' in first) {
-        return (first as { id: number }).id
+        return asNumericId((first as { id: unknown }).id)
       }
     }
-    if (typeof connect === 'number') return connect
     if (typeof connect === 'object' && connect && 'id' in connect) {
-      return (connect as { id: number }).id
+      return asNumericId((connect as { id: unknown }).id)
     }
+    return asNumericId(connect)
   }
   return null
 }

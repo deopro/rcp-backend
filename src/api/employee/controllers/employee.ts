@@ -20,6 +20,8 @@ import {
 
   findDuplicateEmployeeUser,
 
+  linkedUserMustBeEmployeeRole,
+
   normalizeEmployeeNumber,
 
   overlayEmployeeIdentityFromUser,
@@ -208,6 +210,10 @@ export default factories.createCoreController('api::employee.employee', ({ strap
 
       if (duplicateUser) return ctx.badRequest(duplicateUser)
 
+      const invalidRole = await linkedUserMustBeEmployeeRole(strapi, linkedUserId)
+
+      if (invalidRole) return ctx.badRequest(invalidRole)
+
       delete body.data.user
 
       delete body.data.team
@@ -351,6 +357,10 @@ export default factories.createCoreController('api::employee.employee', ({ strap
       )
 
       if (duplicateUser) return ctx.badRequest(duplicateUser)
+
+      const invalidRole = await linkedUserMustBeEmployeeRole(strapi, linkedUserId)
+
+      if (invalidRole) return ctx.badRequest(invalidRole)
 
       delete body.data.user
 

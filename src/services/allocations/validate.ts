@@ -2,6 +2,7 @@
  * Allocation validation — daily capacity guard (server-authoritative).
  */
 import type { Core } from '@strapi/strapi'
+import { extractRelationId } from '../../utils/employee-scope'
 
 export class CapacityExceededError extends Error {
   code = 'CAPACITY_EXCEEDED'
@@ -91,20 +92,10 @@ export async function assertUniqueAllocation(
   return null
 }
 
-function relationId(value: unknown): number | undefined {
-  if (typeof value === 'number') return value
-  if (value && typeof value === 'object') {
-    const v = value as { connect?: number[]; id?: number }
-    if (Array.isArray(v.connect) && v.connect[0]) return v.connect[0]
-    if (v.id) return v.id
-  }
-  return undefined
-}
-
 export function extractAllocationFields(data: Record<string, unknown>) {
   return {
-    employeeId: relationId(data.employee),
-    projectId: relationId(data.project),
+    employeeId: extractRelationId(data, 'employee') ?? undefined,
+    projectId: extractRelationId(data, 'project') ?? undefined,
     date: data.allocation_date as string | undefined,
     hours: Number(data.hours),
     notes: data.notes as string | undefined,
