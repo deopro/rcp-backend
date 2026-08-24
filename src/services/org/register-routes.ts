@@ -41,8 +41,27 @@ export function registerOrgRoutes(strapi: Core.Strapi) {
           limit: 500,
         })
 
+        const unlinked =
+          ctx.query.unlinked === 'true' ||
+          ctx.query.unlinked === '1' ||
+          (Array.isArray(ctx.query.unlinked) && ctx.query.unlinked[0] === 'true')
+
+        let options = users
+        if (unlinked) {
+          const linkedEmployees = await strapi.db.query('api::employee.employee').findMany({
+            populate: ['user'],
+            select: ['id'],
+          })
+          const taken = new Set(
+            linkedEmployees
+              .map((row) => (row.user as { id?: number } | undefined)?.id)
+              .filter((id): id is number => typeof id === 'number'),
+          )
+          options = users.filter((u) => !taken.has(u.id as number))
+        }
+
         ctx.body = {
-          data: users.map((u) => ({
+          data: options.map((u) => ({
             id: u.id,
             username: u.username,
             email: u.email,

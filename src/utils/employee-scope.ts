@@ -168,6 +168,22 @@ export async function findDuplicateEmployeeNumber(
   return existing ? 'An employee with this number already exists' : null
 }
 
+/** Return an error message if another employee is already linked to this user. */
+export async function findDuplicateEmployeeUser(
+  strapi: Core.Strapi,
+  userId: number | null | undefined,
+  excludeId?: number,
+): Promise<string | null> {
+  if (userId == null) return null
+  const existing = await strapi.db.query('api::employee.employee').findOne({
+    where: excludeId
+      ? { user: userId, id: { $ne: excludeId } }
+      : { user: userId },
+    select: ['id'],
+  })
+  return existing ? 'This user is already linked to another employee' : null
+}
+
 export async function syncEmployeeRoleUsers(strapi: Core.Strapi): Promise<void> {
   const employeeRole = await strapi.db.query('plugin::users-permissions.role').findOne({
     where: { type: 'employee' },
