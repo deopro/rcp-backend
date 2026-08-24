@@ -13,7 +13,6 @@
   "attributes": {
     "employee_number": {
       "type": "string",
-      "required": true,
       "unique": true
     },
     "full_name": {

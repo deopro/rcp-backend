@@ -40,11 +40,6 @@ export async function findEmployeeIdForUser(
   return null
 }
 
-function employeeNumberForUser(userId: number, username?: string | null): string {
-  const base = typeof username === 'string' && username.trim() ? username.trim() : `user-${userId}`
-  return base.slice(0, 48)
-}
-
 function fullNameFromUser(
   user: {
     first_name?: string | null
@@ -72,19 +67,10 @@ export async function ensureEmployeeForUser(
   if (!user?.email) return null
 
   const email = user.email.trim().toLowerCase()
-  let employeeNumber = employeeNumberForUser(userId, user.username)
-
-  const numberTaken = await strapi.db.query('api::employee.employee').findOne({
-    where: { employee_number: employeeNumber },
-    select: ['id'],
-  })
-  if (numberTaken) {
-    employeeNumber = `user-${userId}`
-  }
 
   const created = await strapi.db.query('api::employee.employee').create({
     data: {
-      employee_number: employeeNumber,
+      employee_number: null,
       full_name: fullNameFromUser(user, userId),
       email,
       position: null,
@@ -155,6 +141,31 @@ export async function findDuplicateEmployeeEmail(
     select: ['id'],
   })
   return existing ? 'An employee with this email already exists' : null
+}
+
+export function normalizeEmployeeNumber(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined
+  if (value == null) return null
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed ? trimmed.slice(0, 48) : null
+}
+
+/** Return an error message if another employee already uses this number. */
+export async function findDuplicateEmployeeNumber(
+  strapi: Core.Strapi,
+  employeeNumber: unknown,
+  excludeId?: number,
+): Promise<string | null> {
+  if (typeof employeeNumber !== 'string' || !employeeNumber.trim()) return null
+  const normalized = employeeNumber.trim()
+  const existing = await strapi.db.query('api::employee.employee').findOne({
+    where: excludeId
+      ? { employee_number: normalized, id: { $ne: excludeId } }
+      : { employee_number: normalized },
+    select: ['id'],
+  })
+  return existing ? 'An employee with this number already exists' : null
 }
 
 export async function syncEmployeeRoleUsers(strapi: Core.Strapi): Promise<void> {

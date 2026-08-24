@@ -664,9 +664,7 @@ export interface ApiEmployeeEmployee extends Struct.CollectionTypeSchema {
     email: Schema.Attribute.Email &
       Schema.Attribute.Required &
       Schema.Attribute.Unique;
-    employee_number: Schema.Attribute.String &
-      Schema.Attribute.Required &
-      Schema.Attribute.Unique;
+    employee_number: Schema.Attribute.String & Schema.Attribute.Unique;
     employee_skills: Schema.Attribute.Relation<
       'oneToMany',
       'api::employee-skill.employee-skill'

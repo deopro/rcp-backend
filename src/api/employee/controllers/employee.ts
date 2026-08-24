@@ -16,13 +16,29 @@ import {
 
   findDuplicateEmployeeEmail,
 
+  findDuplicateEmployeeNumber,
+
+  normalizeEmployeeNumber,
+
   overlayEmployeeIdentityFromUser,
+
+  persistUserRelation,
 
   scopeEmployeeFilters,
 
 } from '../../../utils/employee-scope'
 
 import { resolveRoleType } from '../../../utils/resolve-role-type'
+
+
+
+function resultDocumentId(result: unknown): string | undefined {
+
+  const data = (result as { data?: { documentId?: string } } | undefined)?.data
+
+  return data?.documentId
+
+}
 
 
 
@@ -142,6 +158,8 @@ export default factories.createCoreController('api::employee.employee', ({ strap
 
     const teamId = body?.data ? extractRelationId(body.data, 'team') : null
 
+    const linkedUserId = body?.data ? extractRelationId(body.data, 'user') : null
+
 
 
     if (roleType === 'team_leader' || roleType === 'department_manager') {
@@ -166,13 +184,39 @@ export default factories.createCoreController('api::employee.employee', ({ strap
 
       }
 
-      const duplicate = await findDuplicateEmployeeEmail(strapi, body.data.email)
+      if (body.data.employee_number !== undefined) {
 
-      if (duplicate) return ctx.badRequest(duplicate)
+        body.data.employee_number = normalizeEmployeeNumber(body.data.employee_number)
+
+      } else {
+
+        body.data.employee_number = null
+
+      }
+
+      const duplicateEmail = await findDuplicateEmployeeEmail(strapi, body.data.email)
+
+      if (duplicateEmail) return ctx.badRequest(duplicateEmail)
+
+      const duplicateNumber = await findDuplicateEmployeeNumber(strapi, body.data.employee_number)
+
+      if (duplicateNumber) return ctx.badRequest(duplicateNumber)
+
+      delete body.data.user
+
+      delete body.data.team
 
     }
 
-    return await super.create(ctx)
+    const result = await super.create(ctx)
+
+    const documentId = resultDocumentId(result)
+
+    await persistUserRelation(strapi, 'api::employee.employee', documentId, 'user', linkedUserId)
+
+    await persistUserRelation(strapi, 'api::employee.employee', documentId, 'team', teamId)
+
+    return result
 
   },
 
@@ -224,13 +268,17 @@ export default factories.createCoreController('api::employee.employee', ({ strap
 
 
 
+    const linkedUserId = body?.data ? extractRelationId(body.data, 'user') : null
+
+    const teamId = body?.data ? extractRelationId(body.data, 'team') : null
+
+
+
     if (body?.data && (roleType === 'team_leader' || roleType === 'department_manager')) {
 
-      const teamId =
+      const assignedTeamId = teamId ?? (existing.team?.id as number | undefined) ?? null
 
-        extractRelationId(body.data, 'team') ?? (existing.team?.id as number | undefined) ?? null
-
-      const teamAllowed = await canAssignEmployeeToTeam(strapi, roleType, user.id, teamId)
+      const teamAllowed = await canAssignEmployeeToTeam(strapi, roleType, user.id, assignedTeamId)
 
       if (!teamAllowed) return ctx.forbidden('Employee must belong to an authorized team')
 
@@ -256,7 +304,13 @@ export default factories.createCoreController('api::employee.employee', ({ strap
 
       }
 
-      const duplicate = await findDuplicateEmployeeEmail(
+      if (body.data.employee_number !== undefined) {
+
+        body.data.employee_number = normalizeEmployeeNumber(body.data.employee_number)
+
+      }
+
+      const duplicateEmail = await findDuplicateEmployeeEmail(
 
         strapi,
 
@@ -266,13 +320,37 @@ export default factories.createCoreController('api::employee.employee', ({ strap
 
       )
 
-      if (duplicate) return ctx.badRequest(duplicate)
+      if (duplicateEmail) return ctx.badRequest(duplicateEmail)
+
+      const duplicateNumber = await findDuplicateEmployeeNumber(
+
+        strapi,
+
+        body.data.employee_number,
+
+        existing.id as number,
+
+      )
+
+      if (duplicateNumber) return ctx.badRequest(duplicateNumber)
+
+      delete body.data.user
+
+      delete body.data.team
 
     }
 
 
 
-    return await super.update(ctx)
+    const result = await super.update(ctx)
+
+    const updatedDocumentId = resultDocumentId(result) ?? (ctx.params.id as string)
+
+    await persistUserRelation(strapi, 'api::employee.employee', updatedDocumentId, 'user', linkedUserId)
+
+    await persistUserRelation(strapi, 'api::employee.employee', updatedDocumentId, 'team', teamId)
+
+    return result
 
   },
 
