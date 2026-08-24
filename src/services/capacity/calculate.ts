@@ -3,6 +3,7 @@
  * Available hours exclude weekends, public holidays, and approved leave.
  */
 import type { Core } from '@strapi/strapi'
+import { findEmployeeIdForUser } from '../../utils/employee-scope'
 import {
   eachDay,
   expandDateRangeToIso,
@@ -145,12 +146,13 @@ export async function computeCapacity(
   if (opts.employeeIds?.length) {
     employeeWhere.id = { $in: opts.employeeIds }
   }
-  if (opts.teamId) {
+  if (opts.teamId && opts.roleType !== 'employee') {
     employeeWhere.team = opts.teamId
   }
 
   if (opts.userId && opts.roleType === 'employee') {
-    employeeWhere.user = opts.userId
+    const employeeId = await findEmployeeIdForUser(strapi, opts.userId)
+    employeeWhere.id = employeeId ?? { $in: [] }
   } else if (opts.userId && opts.roleType === 'team_leader') {
     employeeWhere.team = { team_leader: opts.userId }
   } else if (opts.userId && opts.roleType === 'department_manager') {
