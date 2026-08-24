@@ -5,6 +5,7 @@ import { registerApprovalRoutes } from './services/approvals/register-routes'
 import { registerBenchRoutes } from './services/bench/register-routes'
 import { registerDashboardRoutes } from './services/dashboard/register-routes'
 import { registerForecastRoutes } from './services/forecast/register-routes'
+import { registerNotificationRoutes } from './services/notifications/register-routes'
 import { registerOrgRoutes } from './services/org/register-routes'
 import { registerProjectRoutes } from './services/projects/register-routes'
 import { registerReportRoutes } from './services/reports/register-routes'
@@ -17,7 +18,13 @@ import { ensureSkillsPermissions } from './services/rbac/ensure-skills-permissio
 import { ensureUserRelationPermissions } from './services/rbac/ensure-user-relation-permissions'
 import { ensureRcpRoles } from './services/rbac/ensure-roles'
 import { syncEmployeeRoleUsers } from './utils/employee-scope'
+import {
+  isAccountBlocked,
+  logDuplicateEmployeeEmails,
+  migrateInactiveUsersToBlocked,
+} from './utils/account-status'
 import { getAuthMode } from './utils/auth-mode'
+import { exchangeIdToken, OidcError } from './services/auth/oidc'
 
 function sanitizeUser(user: Record<string, unknown>) {
   const { password: _p, resetPasswordToken: _r, confirmationToken: _c, ...safe } = user
@@ -40,6 +47,7 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
       enum: ['pt-PT', 'en'],
       default: 'pt-PT',
     },
+    // Kept registered so schema sync does not drop the column before inactive→blocked copy.
     status: {
       type: 'enumeration',
       enum: ['active', 'inactive'],
@@ -96,6 +104,7 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
   registerForecastRoutes(strapi)
   registerAiRoutes(strapi)
   registerReportRoutes(strapi)
+  registerNotificationRoutes(strapi)
 
   // content-api routes get users-permissions JWT auth; default server.routes() uses type "api" (no strategy).
   strapi.server.routes({
@@ -116,8 +125,8 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
           populate: ['role'],
         })
 
-        if (!user || user.status === 'inactive') {
-          return ctx.unauthorized('User is inactive')
+        if (!user || isAccountBlocked(user)) {
+          return ctx.unauthorized('User is blocked')
         }
 
         ctx.body = sanitizeUser(user as Record<string, unknown>)
@@ -148,8 +157,8 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
           where: { id: authUser.id },
         })
 
-        if (!existing || existing.status === 'inactive') {
-          return ctx.unauthorized('User is inactive')
+        if (!existing || isAccountBlocked(existing)) {
+          return ctx.unauthorized('User is blocked')
         }
 
         const updated = await strapi.db.query('plugin::users-permissions.user').update({
@@ -167,21 +176,26 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
       },
     },
     {
-      method: 'GET',
-      path: '/auth/oidc',
+      method: 'POST',
+      path: '/auth/oidc/exchange',
       info: {},
       handler: async (ctx) => {
-        const mode = getAuthMode()
-        ctx.status = mode === 'oidc' ? 501 : 400
-        ctx.body = {
-          error: {
-            status: ctx.status,
-            name: 'OidcNotConfigured',
-            message:
-              mode === 'oidc'
-                ? 'OIDC/Entra ID mode is enabled but the provider is not configured yet. See ARCHITECTURE.md.'
-                : 'AUTH_MODE is local. Set AUTH_MODE=oidc and configure OIDC_* env vars to use Entra ID.',
-          },
+        const body = ctx.request.body as { id_token?: string }
+        try {
+          ctx.body = await exchangeIdToken(strapi, body?.id_token)
+        } catch (error) {
+          if (error instanceof OidcError) {
+            ctx.status = error.status
+            ctx.body = {
+              error: {
+                status: error.status,
+                name: error.name,
+                message: error.message,
+              },
+            }
+            return
+          }
+          throw error
         }
       },
       config: {
@@ -204,6 +218,8 @@ const bootstrap = async ({ strapi }: { strapi: Core.Strapi }) => {
     await ensureLeavePermissions(strapi)
     await ensureApprovalPermissions(strapi)
     await ensureUserRelationPermissions(strapi)
+    await migrateInactiveUsersToBlocked(strapi)
+    await logDuplicateEmployeeEmails(strapi)
     await syncEmployeeRoleUsers(strapi)
   } catch (error) {
     strapi.log.error('Failed to ensure RCP roles / permissions')

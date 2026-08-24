@@ -1,0 +1,52 @@
+{
+  "kind": "collectionType",
+  "collectionName": "notifications",
+  "info": {
+    "singularName": "notification",
+    "pluralName": "notifications",
+    "displayName": "Notification",
+    "description": "In-app notifications for users"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": [
+        "approval_request",
+        "approval_returned",
+        "approval_approved",
+        "approval_locked",
+        "approval_reopened",
+        "capacity_alert",
+        "over_allocation",
+        "bench_alert",
+        "missing_allocation"
+      ],
+      "required": true
+    },
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "body": {
+      "type": "text"
+    },
+    "payload": {
+      "type": "json"
+    },
+    "read_at": {
+      "type": "datetime"
+    },
+    "channels": {
+      "type": "json"
+    }
+  }
+}

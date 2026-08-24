@@ -5,6 +5,7 @@ import type { Core } from '@strapi/strapi'
 import { computeCapacity } from '../capacity/calculate'
 import { copyAllocations } from './copy'
 import {
+  ensureEmployeeForUser,
   findDepartmentIdsForManager,
   findEmployeeIdForUser,
   findEmployeeIdsInTeams,
@@ -38,11 +39,20 @@ export function registerAllocationRoutes(strapi: Core.Strapi) {
 
           const roleType = await resolveRoleType(strapi, user)
 
+          if (roleType === 'employee') {
+            await ensureEmployeeForUser(strapi, user.id)
+          }
+
           const result = await computeCapacity(strapi, {
             from: query.from,
             to: query.to,
             employeeIds: query.employee ? [Number(query.employee)] : undefined,
-            teamId: query.team ? Number(query.team) : undefined,
+            teamId:
+              roleType === 'employee'
+                ? undefined
+                : query.team
+                  ? Number(query.team)
+                  : undefined,
             userId: user.id,
             roleType,
           })
@@ -74,7 +84,9 @@ export function registerAllocationRoutes(strapi: Core.Strapi) {
           }
 
           if (roleType === 'employee') {
-            const employeeId = await findEmployeeIdForUser(strapi, user.id)
+            const employeeId =
+              (await findEmployeeIdForUser(strapi, user.id)) ??
+              (await ensureEmployeeForUser(strapi, user.id))
             allocWhere.employee = employeeId ?? { id: { $in: [] } }
           } else if (roleType === 'team_leader') {
             const teamIds = await findTeamIdsForLeader(strapi, user.id)
@@ -97,7 +109,12 @@ export function registerAllocationRoutes(strapi: Core.Strapi) {
             computeCapacity(strapi, {
               from: query.from,
               to: query.to,
-              teamId: query.team ? Number(query.team) : undefined,
+              teamId:
+                roleType === 'employee'
+                  ? undefined
+                  : query.team
+                    ? Number(query.team)
+                    : undefined,
               userId: user.id,
               roleType,
             }),

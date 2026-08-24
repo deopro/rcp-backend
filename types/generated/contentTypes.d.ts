@@ -661,10 +661,10 @@ export interface ApiEmployeeEmployee extends Struct.CollectionTypeSchema {
         number
       > &
       Schema.Attribute.DefaultTo<8>;
-    email: Schema.Attribute.Email & Schema.Attribute.Required;
-    employee_number: Schema.Attribute.String &
+    email: Schema.Attribute.Email &
       Schema.Attribute.Required &
       Schema.Attribute.Unique;
+    employee_number: Schema.Attribute.String & Schema.Attribute.Unique;
     employee_skills: Schema.Attribute.Relation<
       'oneToMany',
       'api::employee-skill.employee-skill'
@@ -768,6 +768,59 @@ export interface ApiLeaveLeave extends Struct.CollectionTypeSchema {
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+  };
+}
+
+export interface ApiNotificationNotification
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'notifications';
+  info: {
+    description: 'In-app notifications for users';
+    displayName: 'Notification';
+    pluralName: 'notifications';
+    singularName: 'notification';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    body: Schema.Attribute.Text;
+    channels: Schema.Attribute.JSON;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::notification.notification'
+    > &
+      Schema.Attribute.Private;
+    payload: Schema.Attribute.JSON;
+    publishedAt: Schema.Attribute.DateTime;
+    read_at: Schema.Attribute.DateTime;
+    title: Schema.Attribute.String & Schema.Attribute.Required;
+    type: Schema.Attribute.Enumeration<
+      [
+        'approval_request',
+        'approval_returned',
+        'approval_approved',
+        'approval_locked',
+        'approval_reopened',
+        'capacity_alert',
+        'over_allocation',
+        'bench_alert',
+        'missing_allocation',
+      ]
+    > &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    > &
+      Schema.Attribute.Required;
   };
 }
 
@@ -1455,6 +1508,7 @@ declare module '@strapi/strapi' {
       'api::employee.employee': ApiEmployeeEmployee;
       'api::holiday.holiday': ApiHolidayHoliday;
       'api::leave.leave': ApiLeaveLeave;
+      'api::notification.notification': ApiNotificationNotification;
       'api::project.project': ApiProjectProject;
       'api::skill-category.skill-category': ApiSkillCategorySkillCategory;
       'api::skill.skill': ApiSkillSkill;

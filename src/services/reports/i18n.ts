@@ -61,6 +61,9 @@ const COLUMN_LABELS: Record<Locale, Record<string, string>> = {
     generated: 'Generated at',
     from: 'From',
     to: 'To',
+    active_projects: 'Active projects',
+    pending_approvals: 'Pending approvals',
+    pending_leave: 'Pending leave',
   },
   'pt-PT': {
     employee: 'Colaborador',
@@ -89,6 +92,9 @@ const COLUMN_LABELS: Record<Locale, Record<string, string>> = {
     generated: 'Gerado em',
     from: 'De',
     to: 'Até',
+    active_projects: 'Projetos ativos',
+    pending_approvals: 'Aprovações pendentes',
+    pending_leave: 'Ausências pendentes',
   },
 }
 

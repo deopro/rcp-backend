@@ -4,6 +4,7 @@
 import { factories } from '@strapi/strapi'
 import {
   canAccessEmployee,
+  ensureEmployeeForUser,
   findEmployeeIdForUser,
   isEmployeeAssignedToProject,
   scopeEmployeeRelationFilters,
@@ -81,7 +82,9 @@ export default factories.createCoreController('api::allocation.allocation', ({ s
 
     const roleType = await resolveRoleType(strapi, user)
     if (roleType === 'employee') {
-      const ownId = await findEmployeeIdForUser(strapi, user.id)
+      const ownId =
+        (await findEmployeeIdForUser(strapi, user.id)) ??
+        (await ensureEmployeeForUser(strapi, user.id))
       if (!ownId) return ctx.badRequest('No employee record linked to this user')
       if (fields.employeeId !== ownId) return ctx.forbidden()
       const assigned = await isEmployeeAssignedToProject(strapi, ownId, fields.projectId)
